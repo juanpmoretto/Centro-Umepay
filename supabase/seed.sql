@@ -63,8 +63,11 @@ insert into discount_tiers_headcount (min_people, discount_pct) values
   (26, 6),
   (41, 10);
 
-insert into salon_thresholds (salon_code, label, min_people, max_people, long_weekend_min_nights, long_weekend_min_people) values
-  ('nave', 'Nave', 16, null, 3, 20),
-  ('nodriza', 'Nodriza', 8, 14, null, null);
+-- flat_adjustment: Nave's salon cost is already folded into the per-person
+-- accommodation rates above, so it gets no further adjustment. Nodriza gets
+-- a flat discount off the retreat's final total (confirmed by Umepay staff).
+insert into salon_thresholds (salon_code, label, min_people, max_people, long_weekend_min_nights, long_weekend_min_people, flat_adjustment) values
+  ('nave', 'Nave', 16, null, 3, 20, 0),
+  ('nodriza', 'Nodriza', 8, 14, null, null, -250000);
 
-insert into pricing_settings (id, iva_pct, deposit_pct) values (true, 21, 30);
+insert into pricing_settings (id, iva_pct, deposit_pct, extra_meal_price) values (true, 21, 30, 24485);

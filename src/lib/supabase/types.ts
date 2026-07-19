@@ -99,12 +99,14 @@ export interface SalonThresholdRow {
   max_people: number | null;
   long_weekend_min_nights: number | null;
   long_weekend_min_people: number | null;
+  flat_adjustment: number;
 }
 
 export interface PricingSettingsRow {
   id: true;
   iva_pct: number;
   deposit_pct: number;
+  extra_meal_price: number;
   synced_at: string;
 }
 
@@ -123,7 +125,12 @@ export interface QuoteRow {
   headcount: number;
   accommodation_mix: AccommodationMixEntry[];
   meal_tier_id: string | null;
-  staff_quoted_total: number;
+  extra_meals_count: number;
+  /** Manual override for case-by-case exceptions (minimum billable headcount,
+   * free facilitator lodging, weekday-only discounts) -- see manual_adjustment_note. */
+  manual_adjustment_amount: number;
+  manual_adjustment_note: string | null;
+  calculated_total: number;
   staff_note: string | null;
   booking_request_id: string | null;
   created_at: string;
@@ -139,6 +146,7 @@ export interface QuoteInquiryRow {
   adjusted_headcount: number;
   adjusted_accommodation_mix: AccommodationMixEntry[];
   adjusted_meal_tier_id: string | null;
+  adjusted_extra_meals_count: number;
   estimated_total: number;
   client_message: string | null;
   status: QuoteInquiryStatus;

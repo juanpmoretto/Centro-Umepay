@@ -27,6 +27,7 @@ export function QuoteExplorerPage() {
   const [nights, setNights] = useState(0);
   const [mix, setMix] = useState<AccommodationMixInput[]>([]);
   const [mealTierId, setMealTierId] = useState<string | null>(null);
+  const [extraMealsCount, setExtraMealsCount] = useState(0);
   const [clientMessage, setClientMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -51,6 +52,7 @@ export function QuoteExplorerPage() {
           })),
         );
         setMealTierId(row.meal_tier_id);
+        setExtraMealsCount(row.extra_meals_count);
         setQuoteLoading(false);
       });
   }, [slug]);
@@ -63,7 +65,21 @@ export function QuoteExplorerPage() {
   let calcError: string | null = null;
   try {
     result = calculateQuote(
-      { retreatStartDate: quote.retreat_start_date, nights, accommodationMix: mix, mealTierId },
+      {
+        retreatStartDate: quote.retreat_start_date,
+        nights,
+        accommodationMix: mix,
+        mealTierId,
+        extraMealsCount,
+        // The manual adjustment is a staff-decided exception tied to this
+        // specific negotiated quote (e.g. a minimum-headcount clause) -- the
+        // client can explore everything else, but this stays fixed and is
+        // just shown transparently in the breakdown below.
+        manualAdjustment:
+          quote.manual_adjustment_amount !== 0
+            ? { amount: quote.manual_adjustment_amount, note: quote.manual_adjustment_note ?? '' }
+            : null,
+      },
       config,
     );
   } catch (e) {
@@ -83,6 +99,7 @@ export function QuoteExplorerPage() {
         people_assigned: m.peopleAssigned,
       })),
       adjusted_meal_tier_id: mealTierId,
+      adjusted_extra_meals_count: extraMealsCount,
       estimated_total: result.total,
       client_message: clientMessage || null,
     });
@@ -96,7 +113,7 @@ export function QuoteExplorerPage() {
         <h1 className="text-2xl font-medium">Tu cotización — Centro Umepay</h1>
         <p className="text-muted-foreground">
           Retiro del {format(new Date(quote.retreat_start_date + 'T00:00:00'), 'dd/MM/yyyy')}. Precio original
-          cotizado por el equipo: <strong>{formatARS(quote.staff_quoted_total)}</strong>
+          cotizado por el equipo: <strong>{formatARS(quote.calculated_total)}</strong>
         </p>
         <p className="text-sm text-muted-foreground">
           Podés ajustar personas, alojamiento, comida y noches abajo para explorar variantes.
@@ -139,6 +156,16 @@ export function QuoteExplorerPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="extraMealsCount">Comidas sueltas extra (almuerzo o cena de más)</Label>
+              <Input
+                id="extraMealsCount"
+                type="number"
+                min={0}
+                value={extraMealsCount}
+                onChange={(e) => setExtraMealsCount(Number(e.target.value) || 0)}
+              />
             </div>
           </CardContent>
         </Card>

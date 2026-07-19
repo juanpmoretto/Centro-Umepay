@@ -45,7 +45,7 @@ function assignSalon(
       : totalPeople >= nave.min_people;
 
     if (qualifiesNave) {
-      return { salonCode: 'nave', label: nave.label, warning: null };
+      return { salonCode: 'nave', label: nave.label, warning: null, flatAdjustment: nave.flat_adjustment };
     }
   }
 
@@ -53,7 +53,12 @@ function assignSalon(
     const withinRange =
       totalPeople >= nodriza.min_people && (nodriza.max_people == null || totalPeople <= nodriza.max_people);
     if (withinRange) {
-      return { salonCode: 'nodriza', label: nodriza.label, warning: null };
+      return {
+        salonCode: 'nodriza',
+        label: nodriza.label,
+        warning: null,
+        flatAdjustment: nodriza.flat_adjustment,
+      };
     }
   }
 
@@ -62,6 +67,7 @@ function assignSalon(
     label: null,
     warning:
       'La cantidad de personas queda fuera de los rangos estándar de salón (Nave/Nodriza). Confirmar disponibilidad con el equipo de Umepay.',
+    flatAdjustment: 0,
   };
 }
 
@@ -131,7 +137,10 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     mealSurchargeTotal = round(totalPeople * tier.surcharge_per_person_total);
   }
 
-  const subtotalBeforeDiscounts = round(baseAccommodationTotal + mealSurchargeTotal);
+  const extraMealsCount = input.extraMealsCount ?? 0;
+  const extraMealsTotal = round(extraMealsCount * config.settings.extra_meal_price);
+
+  const subtotalBeforeDiscounts = round(baseAccommodationTotal + mealSurchargeTotal + extraMealsTotal);
 
   const nightsDiscountPct = nightsDiscountFor(config, input.nights);
   const headcountDiscountPct = headcountDiscountFor(config, totalPeople);
@@ -146,7 +155,16 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
   // so this is fixed, not a client-facing toggle.
   const ivaPct = config.settings.iva_pct;
   const ivaAmount = round(subtotalAfterDiscounts * 0.5 * (ivaPct / 100));
-  const total = subtotalAfterDiscounts + ivaAmount;
+
+  // Salon adjustment (Nodriza's flat discount vs. Nave, whose cost is already
+  // folded into the per-person rates) and any staff-entered exception both
+  // apply to the final total, per Umepay's own framing ("discount X off the
+  // retreat's total"), not to the pre-IVA subtotal.
+  const salonAdjustmentAmount = salon.flatAdjustment;
+  const manualAdjustmentAmount = input.manualAdjustment?.amount ?? 0;
+  const manualAdjustmentNote = input.manualAdjustment?.note ?? null;
+
+  const total = subtotalAfterDiscounts + ivaAmount + salonAdjustmentAmount + manualAdjustmentAmount;
 
   const depositPct = config.settings.deposit_pct;
   const depositAmount = round(total * (depositPct / 100));
@@ -161,6 +179,8 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     salon,
     mealTierLabel,
     mealSurchargeTotal,
+    extraMealsCount,
+    extraMealsTotal,
     subtotalBeforeDiscounts,
     nightsDiscountPct,
     headcountDiscountPct,
@@ -169,6 +189,9 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     subtotalAfterDiscounts,
     ivaPct,
     ivaAmount,
+    salonAdjustmentAmount,
+    manualAdjustmentAmount,
+    manualAdjustmentNote,
     total,
     depositPct,
     depositAmount,

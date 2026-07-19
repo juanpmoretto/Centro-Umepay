@@ -43,6 +43,13 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
         </div>
       )}
 
+      {result.extraMealsCount > 0 && (
+        <div className="flex justify-between">
+          <span>Comidas sueltas extra × {result.extraMealsCount}</span>
+          <span>{formatARS(result.extraMealsTotal)}</span>
+        </div>
+      )}
+
       <Separator />
 
       <div className="flex justify-between">
@@ -64,6 +71,20 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
         <span>IVA ({result.ivaPct}% sobre el 50% del subtotal)</span>
         <span>{formatARS(result.ivaAmount)}</span>
       </div>
+
+      {result.salonAdjustmentAmount !== 0 && (
+        <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+          <span>Ajuste por salón {result.salon.label}</span>
+          <span>{formatARS(result.salonAdjustmentAmount)}</span>
+        </div>
+      )}
+
+      {result.manualAdjustmentAmount !== 0 && (
+        <div className="flex justify-between">
+          <span>Ajuste manual{result.manualAdjustmentNote ? `: ${result.manualAdjustmentNote}` : ''}</span>
+          <span>{formatARS(result.manualAdjustmentAmount)}</span>
+        </div>
+      )}
 
       <Separator />
 

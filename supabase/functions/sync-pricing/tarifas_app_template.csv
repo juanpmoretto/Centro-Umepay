@@ -43,11 +43,12 @@ min_people,discount_pct
 41,10
 
 ### SALON_THRESHOLDS
-salon_code,label,min_people,max_people,long_weekend_min_nights,long_weekend_min_people
-nave,Nave,16,,3,20
-nodriza,Nodriza,8,14,,
+salon_code,label,min_people,max_people,long_weekend_min_nights,long_weekend_min_people,flat_adjustment
+nave,Nave,16,,3,20,0
+nodriza,Nodriza,8,14,,,-250000
 
 ### GLOBAL_SETTINGS
 key,value
 iva_pct,21
 deposit_pct,30
+extra_meal_price,24485

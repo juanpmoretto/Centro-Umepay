@@ -48,7 +48,7 @@ export function QuoteDetailPage() {
         <CardContent className="space-y-2 text-sm">
           <p>Personas: {quote.headcount}</p>
           <p>Noches: {quote.retreat_nights}</p>
-          <p>Precio cargado por el equipo: {formatARS(quote.staff_quoted_total)}</p>
+          <p>Precio calculado: {formatARS(quote.calculated_total)}</p>
           {quote.staff_note && <p className="text-muted-foreground">Nota: {quote.staff_note}</p>}
           <p className="text-muted-foreground">Link: {window.location.origin}/q/{quote.slug}</p>
         </CardContent>

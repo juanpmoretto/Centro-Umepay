@@ -33,10 +33,10 @@ function buildConfig(overrides: Partial<PricingConfig> = {}): PricingConfig {
       { id: 'h3', min_people: 41, discount_pct: 10 },
     ],
     salonThresholds: [
-      { id: 's1', salon_code: 'nave', label: 'Nave', min_people: 16, max_people: null, long_weekend_min_nights: 3, long_weekend_min_people: 20 },
-      { id: 's2', salon_code: 'nodriza', label: 'Nodriza', min_people: 8, max_people: 14, long_weekend_min_nights: null, long_weekend_min_people: null },
+      { id: 's1', salon_code: 'nave', label: 'Nave', min_people: 16, max_people: null, long_weekend_min_nights: 3, long_weekend_min_people: 20, flat_adjustment: 0 },
+      { id: 's2', salon_code: 'nodriza', label: 'Nodriza', min_people: 8, max_people: 14, long_weekend_min_nights: null, long_weekend_min_people: null, flat_adjustment: -250000 },
     ],
-    settings: { id: true, iva_pct: 21, deposit_pct: 30, synced_at: '' },
+    settings: { id: true, iva_pct: 21, deposit_pct: 30, extra_meal_price: 24485, synced_at: '' },
     ...overrides,
   };
 }
@@ -163,6 +163,69 @@ describe('calculateQuote', () => {
 
     expect(withMeat.mealSurchargeTotal).toBe(4 * 32000);
     expect(withMeat.total).toBeGreaterThan(vegetarian.total);
+  });
+
+  it('applies the Nodriza flat discount to the final total, and no adjustment for Nave', () => {
+    const config = buildConfig();
+    const nodriza = calculateQuote(
+      {
+        retreatStartDate: '2026-10-01',
+        nights: 1,
+        accommodationMix: [{ accommodationTypeId: CARPA_ID, peopleAssigned: 10 }],
+        mealTierId: null,
+      },
+      config,
+    );
+    expect(nodriza.salon.salonCode).toBe('nodriza');
+    expect(nodriza.salonAdjustmentAmount).toBe(-250000);
+    expect(nodriza.total).toBe(nodriza.subtotalAfterDiscounts + nodriza.ivaAmount - 250000);
+
+    const nave = calculateQuote(
+      {
+        retreatStartDate: '2026-10-01',
+        nights: 1,
+        accommodationMix: [{ accommodationTypeId: CARPA_ID, peopleAssigned: 20 }],
+        mealTierId: null,
+      },
+      config,
+    );
+    expect(nave.salon.salonCode).toBe('nave');
+    expect(nave.salonAdjustmentAmount).toBe(0);
+  });
+
+  it('adds extra standalone meals to the subtotal before discounts', () => {
+    const config = buildConfig();
+    const result = calculateQuote(
+      {
+        retreatStartDate: '2026-10-01',
+        nights: 1,
+        accommodationMix: [{ accommodationTypeId: CARPA_ID, peopleAssigned: 4 }],
+        mealTierId: null,
+        extraMealsCount: 3,
+      },
+      config,
+    );
+
+    expect(result.extraMealsTotal).toBe(3 * 24485);
+    expect(result.subtotalBeforeDiscounts).toBe(result.baseAccommodationTotal + result.extraMealsTotal);
+  });
+
+  it('applies a staff manual adjustment with its note to the final total', () => {
+    const config = buildConfig();
+    const result = calculateQuote(
+      {
+        retreatStartDate: '2026-10-01',
+        nights: 1,
+        accommodationMix: [{ accommodationTypeId: CARPA_ID, peopleAssigned: 4 }],
+        mealTierId: null,
+        manualAdjustment: { amount: -50000, note: 'Alojamiento gratis para el facilitador' },
+      },
+      config,
+    );
+
+    expect(result.manualAdjustmentAmount).toBe(-50000);
+    expect(result.manualAdjustmentNote).toBe('Alojamiento gratis para el facilitador');
+    expect(result.total).toBe(result.subtotalAfterDiscounts + result.ivaAmount - 50000);
   });
 
   it('throws a clear error when the retreat date falls outside every configured season', () => {

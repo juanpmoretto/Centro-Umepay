@@ -44,7 +44,7 @@ export function QuotesListPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Precio cargado: {formatARS(quote.staff_quoted_total)}</p>
+              <p className="text-sm text-muted-foreground">Precio calculado: {formatARS(quote.calculated_total)}</p>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/q/${quote.slug}`)}>
                   Copiar link

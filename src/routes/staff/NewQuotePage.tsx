@@ -22,7 +22,9 @@ export function NewQuotePage() {
   const [nights, setNights] = useState(3);
   const [mix, setMix] = useState<AccommodationMixInput[]>([]);
   const [mealTierId, setMealTierId] = useState<string | null>(null);
-  const [staffQuotedTotal, setStaffQuotedTotal] = useState('');
+  const [extraMealsCount, setExtraMealsCount] = useState(0);
+  const [manualAdjustmentAmount, setManualAdjustmentAmount] = useState('');
+  const [manualAdjustmentNote, setManualAdjustmentNote] = useState('');
   const [staffNote, setStaffNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -31,17 +33,31 @@ export function NewQuotePage() {
   if (loading) return <p className="text-muted-foreground">Cargando configuración de precios…</p>;
   if (error || !config) return <p className="text-destructive">Error cargando precios: {error}</p>;
 
+  const manualAmount = Number(manualAdjustmentAmount) || 0;
+  const manualAdjustmentMissingNote = manualAmount !== 0 && manualAdjustmentNote.trim() === '';
+
   let previewError: string | null = null;
   let preview: QuoteResult | null = null;
   if (retreatStartDate && mix.length > 0) {
     try {
-      preview = calculateQuote({ retreatStartDate, nights, accommodationMix: mix, mealTierId }, config);
+      preview = calculateQuote(
+        {
+          retreatStartDate,
+          nights,
+          accommodationMix: mix,
+          mealTierId,
+          extraMealsCount,
+          manualAdjustment: manualAmount !== 0 ? { amount: manualAmount, note: manualAdjustmentNote } : null,
+        },
+        config,
+      );
     } catch (e) {
       previewError = e instanceof Error ? e.message : 'Error calculando el estimado';
     }
   }
 
   async function handleCreate() {
+    if (!preview) return;
     setSaving(true);
     setSaveError(null);
 
@@ -65,7 +81,10 @@ export function NewQuotePage() {
         people_assigned: m.peopleAssigned,
       })),
       meal_tier_id: mealTierId,
-      staff_quoted_total: Number(staffQuotedTotal),
+      extra_meals_count: extraMealsCount,
+      manual_adjustment_amount: manualAmount,
+      manual_adjustment_note: manualAmount !== 0 ? manualAdjustmentNote : null,
+      calculated_total: preview.total,
       staff_note: staffNote || null,
       booking_request_id: null,
       expires_at: null,
@@ -143,15 +162,43 @@ export function NewQuotePage() {
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="staffQuotedTotal">Precio ya calculado por el equipo (ARS)</Label>
+            <Label htmlFor="extraMealsCount">Comidas sueltas extra (almuerzo o cena fuera de lo incluido)</Label>
             <Input
-              id="staffQuotedTotal"
+              id="extraMealsCount"
               type="number"
               min={0}
-              value={staffQuotedTotal}
-              onChange={(e) => setStaffQuotedTotal(e.target.value)}
+              value={extraMealsCount}
+              onChange={(e) => setExtraMealsCount(Number(e.target.value) || 0)}
             />
           </div>
+
+          <div className="space-y-1.5 rounded-md border border-dashed p-3">
+            <Label htmlFor="manualAdjustmentAmount">Ajuste manual (ARS, opcional)</Label>
+            <p className="text-xs text-muted-foreground">
+              Para excepciones caso por caso que no calcula la fórmula: mínimo de facturación aunque se
+              hospeden menos personas, alojamiento gratis para el facilitador, descuento por retiro entre
+              semana, etc. Poné un monto negativo para descontar o positivo para sumar, y siempre el motivo.
+            </p>
+            <Input
+              id="manualAdjustmentAmount"
+              type="number"
+              value={manualAdjustmentAmount}
+              onChange={(e) => setManualAdjustmentAmount(e.target.value)}
+              placeholder="Ej: -50000"
+            />
+            {manualAmount !== 0 && (
+              <>
+                <Label htmlFor="manualAdjustmentNote">Motivo del ajuste (obligatorio)</Label>
+                <Input
+                  id="manualAdjustmentNote"
+                  value={manualAdjustmentNote}
+                  onChange={(e) => setManualAdjustmentNote(e.target.value)}
+                  placeholder="Ej: alojamiento gratis para el facilitador"
+                />
+              </>
+            )}
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="staffNote">Nota interna (opcional)</Label>
             <Textarea id="staffNote" value={staffNote} onChange={(e) => setStaffNote(e.target.value)} />
@@ -159,7 +206,7 @@ export function NewQuotePage() {
           {saveError && <p className="text-sm text-destructive">{saveError}</p>}
           <Button
             className="w-full"
-            disabled={saving || !retreatStartDate || mix.length === 0 || !staffQuotedTotal}
+            disabled={saving || !preview || manualAdjustmentMissingNote}
             onClick={handleCreate}
           >
             {saving ? 'Creando…' : 'Crear cotización y generar link'}
@@ -169,14 +216,12 @@ export function NewQuotePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Vista previa del estimado (nuestra fórmula)</CardTitle>
+          <CardTitle>Cotización calculada</CardTitle>
         </CardHeader>
         <CardContent>
           {previewError && <p className="text-destructive text-sm">{previewError}</p>}
           {!preview && !previewError && (
-            <p className="text-sm text-muted-foreground">
-              Completá fecha y alojamiento para ver el estimado calculado por la app.
-            </p>
+            <p className="text-sm text-muted-foreground">Completá fecha y alojamiento para ver el precio.</p>
           )}
           {preview && <QuoteBreakdown result={preview} />}
         </CardContent>

@@ -108,6 +108,11 @@ export const salonThresholdRowSchema = z.object({
   max_people: optionalNumberFromString,
   long_weekend_min_nights: optionalNumberFromString,
   long_weekend_min_people: optionalNumberFromString,
+  // Flat amount added to (positive) or subtracted from (negative) the
+  // retreat's final total for this salon. Nave's cost is already folded
+  // into the per-person accommodation rates, so it's normally 0; Nodriza
+  // carries a flat discount.
+  flat_adjustment: numberFromString,
 });
 
 export const globalSettingRowSchema = z.object({

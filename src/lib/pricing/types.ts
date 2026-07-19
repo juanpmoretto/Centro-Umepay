@@ -25,12 +25,22 @@ export interface AccommodationMixInput {
   peopleAssigned: number;
 }
 
+export interface ManualAdjustment {
+  amount: number;
+  note: string;
+}
+
 export interface QuoteInput {
   retreatStartDate: string; // ISO date, e.g. "2026-10-15"
   nights: number;
   accommodationMix: AccommodationMixInput[];
   /** null = base vegetarian menu, no surcharge */
   mealTierId: string | null;
+  /** standalone lunches/dinners beyond the 4 meals/day already included per night */
+  extraMealsCount?: number;
+  /** staff-entered exception (minimum billable headcount, free facilitator
+   * lodging, weekday-only discount, etc.) -- always carries a note explaining why */
+  manualAdjustment?: ManualAdjustment | null;
   /** static list of long-weekend start dates (ISO), used only for the Nave 3-night/20-person rule */
   longWeekendDates?: string[];
 }
@@ -47,6 +57,7 @@ export interface SalonAssignment {
   salonCode: 'nave' | 'nodriza' | null;
   label: string | null;
   warning: string | null;
+  flatAdjustment: number;
 }
 
 export interface QuoteResult {
@@ -62,6 +73,9 @@ export interface QuoteResult {
   mealTierLabel: string | null;
   mealSurchargeTotal: number;
 
+  extraMealsCount: number;
+  extraMealsTotal: number;
+
   subtotalBeforeDiscounts: number;
 
   nightsDiscountPct: number;
@@ -72,6 +86,11 @@ export interface QuoteResult {
 
   ivaPct: number;
   ivaAmount: number;
+
+  salonAdjustmentAmount: number;
+  manualAdjustmentAmount: number;
+  manualAdjustmentNote: string | null;
+
   total: number;
 
   depositPct: number;
