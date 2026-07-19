@@ -66,6 +66,9 @@ export const seasonRowSchema = z.object({
   season_name: z.string().min(1),
   start_date: z.string().min(1),
   end_date: z.string().min(1),
+  // Charged every night, for the whole group. Umepay re-prices roughly
+  // every two months (not by calendar season), so this varies per row.
+  salon_per_day: numberFromString,
 });
 
 export const accommodationTypeRowSchema = z.object({

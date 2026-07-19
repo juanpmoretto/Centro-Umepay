@@ -46,6 +46,9 @@ export interface PricingSeasonRow {
   name: string;
   start_date: string;
   end_date: string;
+  /** Charged every night, for the whole group (not per person). Varies by
+   * season since Centro Umepay re-prices roughly every two months. */
+  salon_per_day: number;
   sort_order: number;
   synced_at: string;
 }
@@ -110,8 +113,6 @@ export interface PricingSettingsRow {
   iva_pct: number;
   deposit_pct: number;
   extra_meal_price: number;
-  /** Charged every night, for the whole group (not per person). */
-  salon_per_day: number;
   /** Charged once per stay regardless of how many nights (not per night). */
   logistics_flat: number;
   synced_at: string;

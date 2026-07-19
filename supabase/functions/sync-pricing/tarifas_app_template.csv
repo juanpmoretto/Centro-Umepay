@@ -1,6 +1,7 @@
 ### SEASONS
-season_name,start_date,end_date
-Temporada actual,2020-01-01,2035-12-31
+season_name,start_date,end_date,salon_per_day
+Julio-Agosto 2026,2026-07-01,2026-08-31,181500
+Septiembre-Octubre 2026,2026-09-01,2026-10-31,193600
 
 ### ACCOMMODATION_TYPES
 code,label,min_capacity,max_capacity,total_units,bathroom_type
@@ -20,19 +21,32 @@ cabext_sextuple,Cabaña con baño exterior · séxtuple,6,6,3,exterior
 
 ### RATES
 season_name,accommodation_code,combined_rate_per_night
-Temporada actual,carpa,70660.35
-Temporada actual,trailer_x1,107758.88
-Temporada actual,trailer_x2,169464.41
-Temporada actual,cabint_individual,242081.12
-Temporada actual,cabint_doble,307624.44
-Temporada actual,cabint_triple,373167.75
-Temporada actual,cabint_cuadruple,438711.07
-Temporada actual,cabext_individual,186159.21
-Temporada actual,cabext_doble,250057.76
-Temporada actual,cabext_triple,311763.30
-Temporada actual,cabext_cuadruple,373468.83
-Temporada actual,cabext_quintuple,435174.37
-Temporada actual,cabext_sextuple,496879.90
+Julio-Agosto 2026,carpa,86173.92
+Julio-Agosto 2026,trailer_x1,122454.99
+Julio-Agosto 2026,trailer_x2,202568.47
+Julio-Agosto 2026,cabint_individual,226325.92
+Julio-Agosto 2026,cabint_doble,317401.56
+Julio-Agosto 2026,cabint_triple,400905.22
+Julio-Agosto 2026,cabint_cuadruple,497390.83
+Julio-Agosto 2026,cabext_individual,183046.18
+Julio-Agosto 2026,cabext_doble,269794.51
+Julio-Agosto 2026,cabext_triple,359789.69
+Julio-Agosto 2026,cabext_cuadruple,445455.36
+Julio-Agosto 2026,cabext_quintuple,556007.76
+Julio-Agosto 2026,cabext_sextuple,642757.19
+Septiembre-Octubre 2026,carpa,90482.72
+Septiembre-Octubre 2026,trailer_x1,128577.84
+Septiembre-Octubre 2026,trailer_x2,212697.10
+Septiembre-Octubre 2026,cabint_individual,237642.33
+Septiembre-Octubre 2026,cabint_doble,333271.85
+Septiembre-Octubre 2026,cabint_triple,420950.80
+Septiembre-Octubre 2026,cabint_cuadruple,522260.79
+Septiembre-Octubre 2026,cabext_individual,192198.60
+Septiembre-Octubre 2026,cabext_doble,283284.44
+Septiembre-Octubre 2026,cabext_triple,377779.49
+Septiembre-Octubre 2026,cabext_cuadruple,467728.55
+Septiembre-Octubre 2026,cabext_quintuple,583808.67
+Septiembre-Octubre 2026,cabext_sextuple,674895.67
 
 ### MEAL_TIERS
 code,label,protein_tier,surcharge_per_person_total
@@ -66,5 +80,4 @@ key,value
 iva_pct,21
 deposit_pct,30
 extra_meal_price,24485.2
-salon_per_day,58557.23
 logistics_flat,50017.95

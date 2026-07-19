@@ -16,7 +16,7 @@ const QUAD_RATE = 438711.07; // "cabaña con baño interior · cuádruple" -- NO
 
 function buildConfig(overrides: Partial<PricingConfig> = {}): PricingConfig {
   return {
-    seasons: [{ id: SEASON_ID, name: 'Temporada actual', start_date: '2020-01-01', end_date: '2035-12-31', sort_order: 1, synced_at: '' }],
+    seasons: [{ id: SEASON_ID, name: 'Temporada actual', start_date: '2020-01-01', end_date: '2035-12-31', salon_per_day: SALON_PER_DAY, sort_order: 1, synced_at: '' }],
     accommodationTypes: [
       { id: SINGLE_ID, code: 'cabint_individual', label: 'Cabaña con baño interior · individual', min_capacity: 1, max_capacity: 1, total_units: 5, bathroom_type: 'interior', sort_order: 1 },
       { id: QUAD_ID, code: 'cabint_cuadruple', label: 'Cabaña con baño interior · cuádruple', min_capacity: 4, max_capacity: 4, total_units: 5, bathroom_type: 'interior', sort_order: 2 },
@@ -48,7 +48,6 @@ function buildConfig(overrides: Partial<PricingConfig> = {}): PricingConfig {
       iva_pct: 21,
       deposit_pct: 30,
       extra_meal_price: 24485.2,
-      salon_per_day: SALON_PER_DAY,
       logistics_flat: LOGISTICS_FLAT,
       synced_at: '',
     },
@@ -256,7 +255,7 @@ describe('calculateQuote', () => {
 
   it('throws a clear error when the retreat date falls outside every configured season', () => {
     const config = buildConfig({
-      seasons: [{ id: SEASON_ID, name: 'Temporada acotada', start_date: '2026-01-01', end_date: '2026-01-31', sort_order: 1, synced_at: '' }],
+      seasons: [{ id: SEASON_ID, name: 'Temporada acotada', start_date: '2026-01-01', end_date: '2026-01-31', salon_per_day: SALON_PER_DAY, sort_order: 1, synced_at: '' }],
     });
     expect(() =>
       calculateQuote(

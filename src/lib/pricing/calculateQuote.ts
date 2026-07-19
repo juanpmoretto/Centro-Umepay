@@ -142,7 +142,7 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     input.longWeekendDates ?? [],
   );
 
-  const salonCostTotal = round(config.settings.salon_per_day * input.nights);
+  const salonCostTotal = round(season.salon_per_day * input.nights);
   const logisticsCostTotal = round(config.settings.logistics_flat);
   const grossBeforeDiscount = baseAccommodationTotal + salonCostTotal + logisticsCostTotal;
 

@@ -1,15 +1,20 @@
--- Real pricing data, extracted directly from the master Google Sheet's
--- actual cell formulas (not just displayed values). Covers all 10 real
--- bimonthly pricing periods found in the sheet (Jul 2025 through Feb 2027) --
--- Centro Umepay re-prices roughly every two months to track inflation, this
--- is not a summer/winter seasonal split. See supabase/migrations/
--- 0012_real_formula_fix.sql and 0013_seasonal_rates.sql for full derivation
--- notes.
+-- Replaces the single flat "current" season with the 10 real bimonthly
+-- pricing periods found in the master spreadsheet (one tab per period:
+-- JULIO-AGOSTO, SEPT-OCT, NOV-DIC, ENE-FEB, MAR-ABR, MAY-JUN26, JUL-AGO26,
+-- SEP-OCT26, NOV-DIC26, ENE-FEB27). These aren't seasonal (summer/winter)
+-- price differences -- Centro Umepay re-prices roughly every two months to
+-- track inflation, confirmed by the steady ~5% step-up between consecutive
+-- periods. Salon usage cost also increases the same way, so it moves from
+-- a single global pricing_settings value to a per-season one.
 --
--- Known simplification: no separate per-season "logística" fixed fee was
--- found in the dated tabs (only the generic master template has one) --
--- kept as a single global value (pricing_settings.logistics_flat) for every
--- period.
+-- Known gap: no separate per-season "logística" fixed fee was found in
+-- these tabs (only the master template's generic copy has one) -- kept as
+-- the single global pricing_settings.logistics_flat value for all periods.
+
+alter table pricing_seasons add column salon_per_day numeric(12, 2) not null default 58557.23;
+alter table pricing_settings drop column salon_per_day;
+
+delete from pricing_seasons; -- cascades to accommodation_rates
 
 insert into pricing_seasons (name, start_date, end_date, salon_per_day, sort_order) values
   ('Julio-Agosto 2025', '2025-07-01', '2025-08-31', 150000, 1),
@@ -23,28 +28,6 @@ insert into pricing_seasons (name, start_date, end_date, salon_per_day, sort_ord
   ('Noviembre-Diciembre 2026', '2026-11-01', '2026-12-31', 205700, 9),
   ('Enero-Febrero 2027', '2027-01-01', '2027-02-28', 205700, 10);
 
--- Each row is a specific occupancy configuration with a FIXED capacity
--- (min_capacity = max_capacity) -- e.g. a "cuádruple" cabin is a distinct
--- selectable line from a "doble", not the same room priced per head.
-insert into accommodation_types (code, label, min_capacity, max_capacity, total_units, bathroom_type, sort_order) values
-  ('carpa', 'Carpa', 1, 1, 10, 'exterior', 1),
-  ('trailer_x1', 'Trailer individual', 1, 1, 8, 'exterior', 2),
-  ('trailer_x2', 'Trailer doble', 2, 2, 8, 'exterior', 3),
-  ('cabint_individual', 'Cabaña con baño interior · individual', 1, 1, 5, 'interior', 4),
-  ('cabint_doble', 'Cabaña con baño interior · doble', 2, 2, 5, 'interior', 5),
-  ('cabint_triple', 'Cabaña con baño interior · triple', 3, 3, 5, 'interior', 6),
-  ('cabint_cuadruple', 'Cabaña con baño interior · cuádruple', 4, 4, 5, 'interior', 7),
-  ('cabext_individual', 'Cabaña con baño exterior · individual', 1, 1, 3, 'exterior', 8),
-  ('cabext_doble', 'Cabaña con baño exterior · doble', 2, 2, 3, 'exterior', 9),
-  ('cabext_triple', 'Cabaña con baño exterior · triple', 3, 3, 3, 'exterior', 10),
-  ('cabext_cuadruple', 'Cabaña con baño exterior · cuádruple', 4, 4, 3, 'exterior', 11),
-  ('cabext_quintuple', 'Cabaña con baño exterior · quíntuple', 5, 5, 3, 'exterior', 12),
-  ('cabext_sextuple', 'Cabaña con baño exterior · séxtuple', 6, 6, 3, 'exterior', 13);
-
--- combined_rate_per_night: TOTAL per night for the whole unit at that
--- occupancy, already including its base vegetarian food (confirmed via the
--- real formula: lodging + food, where food scales linearly with occupancy
--- but lodging does not -- a "cuádruple" isn't 4x an "individual").
 insert into accommodation_rates (season_id, accommodation_type_id, combined_rate_per_night)
 select s.id, t.id, v.rate
 from (values
@@ -188,36 +171,105 @@ from (values
   ('Enero-Febrero 2027', 'cabext_quintuple', 611204.23),
   ('Enero-Febrero 2027', 'cabext_sextuple', 707770.34)
 ) as v(season_name, code, rate)
-join accommodation_types t on t.code = v.code
-join pricing_seasons s on s.name = v.season_name;
+join pricing_seasons s on s.name = v.season_name
+join accommodation_types t on t.code = v.code;
 
-insert into meal_surcharge_tiers (code, label, protein_tier, surcharge_per_person_total, sort_order) values
-  ('lunch_only', 'Solo almuerzo con carne (Item 200g)', 'item_200g', 8000, 1),
-  ('lunch_only', 'Solo almuerzo con carne (Premium 400g)', 'premium_400g', 12000, 2),
-  ('lunch_dinner', 'Almuerzo y cena con carne (Item 200g)', 'item_200g', 14000, 3),
-  ('lunch_dinner', 'Almuerzo y cena con carne (Premium 400g)', 'premium_400g', 20000, 4),
-  ('full', 'Todas las comidas con carne (Item 200g)', 'item_200g', 22000, 5),
-  ('full', 'Todas las comidas con carne (Premium 400g)', 'premium_400g', 32000, 6);
+-- sync_pricing_config() needs salon_per_day moved from globalSettings into
+-- the per-season insert, and dropped from the pricing_settings update.
+create or replace function sync_pricing_config(payload jsonb)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rows_synced int := 0;
+begin
+  delete from accommodation_rates;
+  delete from pricing_seasons;
+  delete from accommodation_types;
+  delete from meal_surcharge_tiers;
+  delete from discount_tiers_nights;
+  delete from discount_tiers_headcount;
+  delete from salon_thresholds;
 
-insert into discount_tiers_nights (min_nights, max_nights, discount_pct) values
-  (1, 2, 0),
-  (3, 4, 10),
-  (5, 10, 20),
-  (11, null, 30);
+  insert into pricing_seasons (name, start_date, end_date, salon_per_day, sort_order)
+  select
+    (s->>'season_name'),
+    (s->>'start_date')::date,
+    (s->>'end_date')::date,
+    (s->>'salon_per_day')::numeric,
+    row_number() over ()
+  from jsonb_array_elements(payload->'seasons') as s;
+  get diagnostics rows_synced = row_count;
 
-insert into discount_tiers_headcount (min_people, discount_pct) values
-  (16, 3),
-  (26, 6),
-  (41, 10);
+  insert into accommodation_types (code, label, min_capacity, max_capacity, total_units, bathroom_type, sort_order)
+  select
+    (a->>'code'),
+    (a->>'label'),
+    (a->>'min_capacity')::int,
+    (a->>'max_capacity')::int,
+    (a->>'total_units')::int,
+    (a->>'bathroom_type'),
+    row_number() over ()
+  from jsonb_array_elements(payload->'accommodationTypes') as a;
+  rows_synced := rows_synced + (select count(*) from accommodation_types);
 
--- flat_adjustment: Nave's salon usage is already covered by the fixed
--- salon_per_day (per season, above) + logistics_flat costs (charged on
--- every quote). Nodriza gets a flat discount off the retreat's final total
--- (confirmed by Umepay staff, matches the "DESCUENTO por uso de salon
--- Nodriza" line found in several real per-event budget tabs).
-insert into salon_thresholds (salon_code, label, min_people, max_people, long_weekend_min_nights, long_weekend_min_people, flat_adjustment) values
-  ('nave', 'Nave', 16, null, 3, 20, 0),
-  ('nodriza', 'Nodriza', 8, 14, null, null, -250000);
+  insert into accommodation_rates (season_id, accommodation_type_id, combined_rate_per_night)
+  select
+    ps.id,
+    at.id,
+    (r->>'combined_rate_per_night')::numeric
+  from jsonb_array_elements(payload->'rates') as r
+  join pricing_seasons ps on ps.name = r->>'season_name'
+  join accommodation_types at on at.code = r->>'accommodation_code';
+  rows_synced := rows_synced + (select count(*) from accommodation_rates);
 
-insert into pricing_settings (id, iva_pct, deposit_pct, extra_meal_price, logistics_flat) values
-  (true, 21, 30, 24485.2, 50017.95);
+  insert into meal_surcharge_tiers (code, label, protein_tier, surcharge_per_person_total, sort_order)
+  select
+    (m->>'code'),
+    (m->>'label'),
+    (m->>'protein_tier'),
+    (m->>'surcharge_per_person_total')::numeric,
+    row_number() over ()
+  from jsonb_array_elements(payload->'mealTiers') as m;
+  rows_synced := rows_synced + (select count(*) from meal_surcharge_tiers);
+
+  insert into discount_tiers_nights (min_nights, max_nights, discount_pct)
+  select
+    (n->>'min_nights')::int,
+    nullif(n->>'max_nights', 'null')::int,
+    (n->>'discount_pct')::numeric
+  from jsonb_array_elements(payload->'nightsDiscounts') as n;
+  rows_synced := rows_synced + (select count(*) from discount_tiers_nights);
+
+  insert into discount_tiers_headcount (min_people, discount_pct)
+  select
+    (h->>'min_people')::int,
+    (h->>'discount_pct')::numeric
+  from jsonb_array_elements(payload->'headcountDiscounts') as h;
+  rows_synced := rows_synced + (select count(*) from discount_tiers_headcount);
+
+  insert into salon_thresholds (salon_code, label, min_people, max_people, long_weekend_min_nights, long_weekend_min_people, flat_adjustment)
+  select
+    (s->>'salon_code'),
+    (s->>'label'),
+    (s->>'min_people')::int,
+    nullif(s->>'max_people', 'null')::int,
+    nullif(s->>'long_weekend_min_nights', 'null')::int,
+    nullif(s->>'long_weekend_min_people', 'null')::int,
+    coalesce((s->>'flat_adjustment')::numeric, 0)
+  from jsonb_array_elements(payload->'salonThresholds') as s;
+  rows_synced := rows_synced + (select count(*) from salon_thresholds);
+
+  update pricing_settings
+  set
+    iva_pct = coalesce((payload->'globalSettings'->>'iva_pct')::numeric, iva_pct),
+    deposit_pct = coalesce((payload->'globalSettings'->>'deposit_pct')::numeric, deposit_pct),
+    extra_meal_price = coalesce((payload->'globalSettings'->>'extra_meal_price')::numeric, extra_meal_price),
+    logistics_flat = coalesce((payload->'globalSettings'->>'logistics_flat')::numeric, logistics_flat),
+    synced_at = now();
+
+  return rows_synced;
+end;
+$$;
