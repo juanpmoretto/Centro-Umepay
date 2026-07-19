@@ -1,0 +1,53 @@
+### SEASONS
+season_name,start_date,end_date
+Temporada Alta (Oct-Ene),2026-10-01,2027-01-31
+Temporada Media (Feb-Jun),2026-02-01,2026-06-30
+Temporada Baja (Jul-Sep),2026-07-01,2026-09-30
+
+### ACCOMMODATION_TYPES
+code,label,min_capacity,max_capacity,total_units,bathroom_type
+carpa,Carpa,1,2,10,exterior
+trailer_1,Trailer individual,1,1,8,exterior
+trailer_2,Trailer doble,2,2,8,exterior
+cabana_int,Cabaña con baño interior,1,4,5,interior
+cabana_ext,Cabaña con baño exterior,4,6,3,exterior
+
+### RATES
+season_name,accommodation_code,price_per_person_per_night
+Temporada Alta (Oct-Ene),carpa,25000
+Temporada Alta (Oct-Ene),trailer_1,35000
+Temporada Alta (Oct-Ene),trailer_2,30000
+Temporada Alta (Oct-Ene),cabana_int,45000
+Temporada Alta (Oct-Ene),cabana_ext,40000
+
+### MEAL_TIERS
+code,label,protein_tier,surcharge_per_person_total
+lunch_only,Solo almuerzo con carne (Item 200g),item_200g,8000
+lunch_only,Solo almuerzo con carne (Premium 400g),premium_400g,12000
+lunch_dinner,Almuerzo y cena con carne (Item 200g),item_200g,14000
+lunch_dinner,Almuerzo y cena con carne (Premium 400g),premium_400g,20000
+full,Todas las comidas con carne (Item 200g),item_200g,22000
+full,Todas las comidas con carne (Premium 400g),premium_400g,32000
+
+### DISCOUNTS_NIGHTS
+min_nights,max_nights,discount_pct
+1,2,0
+3,4,10
+5,10,20
+11,,30
+
+### DISCOUNTS_HEADCOUNT
+min_people,discount_pct
+16,3
+26,6
+41,10
+
+### SALON_THRESHOLDS
+salon_code,label,min_people,max_people,long_weekend_min_nights,long_weekend_min_people
+nave,Nave,16,,3,20
+nodriza,Nodriza,8,14,,
+
+### GLOBAL_SETTINGS
+key,value
+iva_pct,21
+deposit_pct,30
