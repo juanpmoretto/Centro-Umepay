@@ -74,11 +74,11 @@ export function NewQuotePage() {
       created_by: userData.user.id,
       retreat_start_date: retreatStartDate,
       retreat_nights: nights,
-      headcount: mix.reduce((sum, m) => sum + m.peopleAssigned, 0),
-      accommodation_mix: mix.map((m) => ({
-        accommodation_type_id: m.accommodationTypeId,
-        units: 1,
-        people_assigned: m.peopleAssigned,
+      headcount: preview.totalPeople,
+      accommodation_mix: preview.accommodationLines.map((line) => ({
+        accommodation_type_id: line.accommodationTypeId,
+        units: line.units,
+        people_assigned: line.peopleAssigned,
       })),
       meal_tier_id: mealTierId,
       extra_meals_count: extraMealsCount,

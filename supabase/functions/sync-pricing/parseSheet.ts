@@ -80,7 +80,10 @@ export const accommodationTypeRowSchema = z.object({
 export const rateRowSchema = z.object({
   season_name: z.string().min(1),
   accommodation_code: z.string().min(1),
-  price_per_person_per_night: numberFromString,
+  // Total per-night rate for the whole accommodation configuration (e.g. the
+  // whole "cuádruple" cabin), already including its base vegetarian food --
+  // NOT a per-person rate. See accommodation_types for each config's fixed capacity.
+  combined_rate_per_night: numberFromString,
 });
 
 export const mealTierRowSchema = z.object({

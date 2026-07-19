@@ -29,12 +29,37 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
         {result.accommodationLines.map((line) => (
           <div key={line.accommodationTypeId} className="flex justify-between">
             <span>
-              {line.label} · {line.peopleAssigned} pers. × {result.nights} noches
+              {line.label} · {line.units} unidad(es) × {line.capacity} pers. × {result.nights} noches
             </span>
             <span>{formatARS(line.lineTotal)}</span>
           </div>
         ))}
+        <div className="flex justify-between text-muted-foreground">
+          <span>Uso de salón ({result.nights} noches)</span>
+          <span>{formatARS(result.salonCostTotal)}</span>
+        </div>
+        <div className="flex justify-between text-muted-foreground">
+          <span>Apoyo difusión y logística</span>
+          <span>{formatARS(result.logisticsCostTotal)}</span>
+        </div>
       </div>
+
+      <Separator />
+
+      <div className="flex justify-between">
+        <span>Subtotal</span>
+        <span>{formatARS(result.grossBeforeDiscount)}</span>
+      </div>
+
+      {(result.nightsDiscountPct > 0 || result.headcountDiscountPct > 0) && (
+        <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+          <span>
+            Descuento ({result.nightsDiscountPct}% por noches × {result.headcountDiscountPct}% por
+            personas)
+          </span>
+          <span>-{formatARS(result.discountAmount)}</span>
+        </div>
+      )}
 
       {result.mealTierLabel && (
         <div className="flex justify-between">
@@ -50,25 +75,8 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
         </div>
       )}
 
-      <Separator />
-
       <div className="flex justify-between">
-        <span>Subtotal</span>
-        <span>{formatARS(result.subtotalBeforeDiscounts)}</span>
-      </div>
-
-      {result.totalDiscountPct > 0 && (
-        <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
-          <span>
-            Descuento ({result.nightsDiscountPct}% por noches + {result.headcountDiscountPct}% por
-            personas)
-          </span>
-          <span>-{formatARS(result.discountAmount)}</span>
-        </div>
-      )}
-
-      <div className="flex justify-between">
-        <span>IVA ({result.ivaPct}% sobre el 50% del subtotal)</span>
+        <span>IVA ({result.ivaPct}% sobre el 50% del total)</span>
         <span>{formatARS(result.ivaAmount)}</span>
       </div>
 

@@ -17,7 +17,7 @@ export function AccommodationMixEditor({ accommodationTypes, value, onChange }: 
   function addRow() {
     const firstUnused = accommodationTypes.find((t) => !value.some((v) => v.accommodationTypeId === t.id));
     const accommodationTypeId = firstUnused?.id ?? accommodationTypes[0]?.id ?? '';
-    onChange([...value, { accommodationTypeId, peopleAssigned: 1 }]);
+    onChange([...value, { accommodationTypeId, units: 1 }]);
   }
 
   function updateRow(index: number, patch: Partial<AccommodationMixInput>) {
@@ -52,12 +52,15 @@ export function AccommodationMixEditor({ accommodationTypes, value, onChange }: 
             </Select>
             <Input
               type="number"
-              min={accType?.min_capacity ?? 1}
-              max={(accType?.max_capacity ?? 1) * (accType?.total_units ?? 1)}
-              className="w-24"
-              value={row.peopleAssigned}
-              onChange={(e) => updateRow(index, { peopleAssigned: Number(e.target.value) || 1 })}
+              min={1}
+              max={accType?.total_units ?? undefined}
+              className="w-20"
+              value={row.units}
+              onChange={(e) => updateRow(index, { units: Number(e.target.value) || 1 })}
             />
+            <span className="w-24 shrink-0 text-xs text-muted-foreground">
+              {accType ? `${accType.max_capacity} pers./unidad` : ''}
+            </span>
             <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(index)}>
               <Trash2 className="size-4" />
             </Button>

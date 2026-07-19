@@ -65,7 +65,10 @@ export interface AccommodationRateRow {
   id: string;
   season_id: string;
   accommodation_type_id: string;
-  price_per_person_per_night: number;
+  /** Total per-night rate for the whole unit at its fixed occupancy
+   * (see AccommodationTypeRow.max_capacity) -- already includes that
+   * configuration's base vegetarian food. Not a per-person rate. */
+  combined_rate_per_night: number;
   synced_at: string;
 }
 
@@ -107,6 +110,10 @@ export interface PricingSettingsRow {
   iva_pct: number;
   deposit_pct: number;
   extra_meal_price: number;
+  /** Charged every night, for the whole group (not per person). */
+  salon_per_day: number;
+  /** Charged once per stay regardless of how many nights (not per night). */
+  logistics_flat: number;
   synced_at: string;
 }
 

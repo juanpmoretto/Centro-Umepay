@@ -71,25 +71,37 @@ function assignSalon(
   };
 }
 
-function nightsDiscountFor(config: PricingConfig, nights: number): number {
+/** 1, 0.9, 0.8 or 0.7 -- multiplies the subtotal, it is not a "% off" to add to anything else. */
+function nightsMultiplierFor(config: PricingConfig, nights: number): number {
   const tier = config.nightsDiscounts.find(
     (t) => nights >= t.min_nights && (t.max_nights == null || nights <= t.max_nights),
   );
-  return tier?.discount_pct ?? 0;
+  return 1 - (tier?.discount_pct ?? 0) / 100;
 }
 
-function headcountDiscountFor(config: PricingConfig, totalPeople: number): number {
+/** 1, 0.97, 0.94 or 0.9 -- multiplies the (already nights-discounted) subtotal. */
+function headcountMultiplierFor(config: PricingConfig, totalPeople: number): number {
   const qualifying = config.headcountDiscounts.filter((t) => totalPeople > t.min_people);
-  if (qualifying.length === 0) return 0;
-  return Math.max(...qualifying.map((t) => t.discount_pct));
+  const pct = qualifying.length === 0 ? 0 : Math.max(...qualifying.map((t) => t.discount_pct));
+  return 1 - pct / 100;
 }
 
 /**
- * Pure, side-effect-free quote calculator. Mirrors the business rules
- * reverse-engineered from the Centro Umepay master spreadsheet (see the
- * project plan for the full derivation), simplified for client-facing
- * "what-if" exploration rather than exact replication of every seasonal
- * exception in the original sheet.
+ * Pure, side-effect-free quote calculator, rebuilt directly from the actual
+ * cell formulas in the Centro Umepay master "cotizador" spreadsheet tab
+ * (not just its displayed values). Key points confirmed against that sheet:
+ *
+ * - Accommodation is priced per whole unit/configuration (e.g. a "cuádruple"
+ *   cabin has one combined rate for the whole cabin), not a flat per-person
+ *   rate -- see accommodationRates.combined_rate_per_night. That combined
+ *   rate already includes the configuration's base vegetarian food.
+ * - Salon usage (per night) and "apoyo difusión y logística" (once per
+ *   stay) are fixed costs present on every quote.
+ * - The nights discount and the headcount discount combine MULTIPLICATIVELY
+ *   (sequential), not additively.
+ * - Meal add-ons (carne surcharge, extra standalone meals) are NOT
+ *   discounted -- they're added after both discounts, then the whole thing
+ *   goes through the standard 50%-with-IVA / 50%-without-IVA split.
  */
 export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteResult {
   const season = resolveSeason(config, input.retreatStartDate);
@@ -105,18 +117,22 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     if (!rate) {
       throw new Error(`No hay tarifa configurada para ${accType.label} en la temporada ${season.name}.`);
     }
-    const lineTotal = entry.peopleAssigned * rate.price_per_person_per_night * input.nights;
+    const capacity = accType.max_capacity;
+    const peopleAssigned = entry.units * capacity;
+    const lineTotal = entry.units * rate.combined_rate_per_night * input.nights;
     return {
       accommodationTypeId: accType.id,
       label: accType.label,
-      peopleAssigned: entry.peopleAssigned,
-      pricePerPersonPerNight: rate.price_per_person_per_night,
+      units: entry.units,
+      capacity,
+      peopleAssigned,
+      combinedRatePerNight: rate.combined_rate_per_night,
       lineTotal: round(lineTotal),
     };
   });
 
   const baseAccommodationTotal = round(accommodationLines.reduce((sum, l) => sum + l.lineTotal, 0));
-  const totalPeople = input.accommodationMix.reduce((sum, e) => sum + e.peopleAssigned, 0);
+  const totalPeople = accommodationLines.reduce((sum, l) => sum + l.peopleAssigned, 0);
 
   const salon = assignSalon(
     config,
@@ -125,6 +141,18 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     input.retreatStartDate,
     input.longWeekendDates ?? [],
   );
+
+  const salonCostTotal = round(config.settings.salon_per_day * input.nights);
+  const logisticsCostTotal = round(config.settings.logistics_flat);
+  const grossBeforeDiscount = baseAccommodationTotal + salonCostTotal + logisticsCostTotal;
+
+  const nightsMultiplier = nightsMultiplierFor(config, input.nights);
+  const headcountMultiplier = headcountMultiplierFor(config, totalPeople);
+  const nightsDiscountPct = round((1 - nightsMultiplier) * 100);
+  const headcountDiscountPct = round((1 - headcountMultiplier) * 100);
+
+  const subtotalAfterDiscounts = round(grossBeforeDiscount * nightsMultiplier * headcountMultiplier);
+  const discountAmount = grossBeforeDiscount - subtotalAfterDiscounts;
 
   let mealTierLabel: string | null = null;
   let mealSurchargeTotal = 0;
@@ -140,31 +168,23 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
   const extraMealsCount = input.extraMealsCount ?? 0;
   const extraMealsTotal = round(extraMealsCount * config.settings.extra_meal_price);
 
-  const subtotalBeforeDiscounts = round(baseAccommodationTotal + mealSurchargeTotal + extraMealsTotal);
-
-  const nightsDiscountPct = nightsDiscountFor(config, input.nights);
-  const headcountDiscountPct = headcountDiscountFor(config, totalPeople);
-  const totalDiscountPct = nightsDiscountPct + headcountDiscountPct;
-
-  const discountAmount = round(subtotalBeforeDiscounts * (totalDiscountPct / 100));
-  const subtotalAfterDiscounts = subtotalBeforeDiscounts - discountAmount;
+  const cashTotalWithAddons = subtotalAfterDiscounts + mealSurchargeTotal + extraMealsTotal;
 
   // Standard payment condition: 50% by bank transfer (with IVA) + 50% cash
   // (without IVA). Confirmed against a real Umepay quote example (21% IVA on
   // exactly 50% of the subtotal reproduces the real transfer-vs-cash totals),
   // so this is fixed, not a client-facing toggle.
   const ivaPct = config.settings.iva_pct;
-  const ivaAmount = round(subtotalAfterDiscounts * 0.5 * (ivaPct / 100));
+  const ivaAmount = round(cashTotalWithAddons * 0.5 * (ivaPct / 100));
 
-  // Salon adjustment (Nodriza's flat discount vs. Nave, whose cost is already
-  // folded into the per-person rates) and any staff-entered exception both
-  // apply to the final total, per Umepay's own framing ("discount X off the
-  // retreat's total"), not to the pre-IVA subtotal.
+  // Salon adjustment (Nodriza's flat discount) and any staff-entered
+  // exception both apply to the final total, per Umepay's own framing
+  // ("discount X off the retreat's total"), not to the pre-IVA subtotal.
   const salonAdjustmentAmount = salon.flatAdjustment;
   const manualAdjustmentAmount = input.manualAdjustment?.amount ?? 0;
   const manualAdjustmentNote = input.manualAdjustment?.note ?? null;
 
-  const total = subtotalAfterDiscounts + ivaAmount + salonAdjustmentAmount + manualAdjustmentAmount;
+  const total = cashTotalWithAddons + ivaAmount + salonAdjustmentAmount + manualAdjustmentAmount;
 
   const depositPct = config.settings.deposit_pct;
   const depositAmount = round(total * (depositPct / 100));
@@ -176,17 +196,19 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     nights: input.nights,
     accommodationLines,
     baseAccommodationTotal,
+    salonCostTotal,
+    logisticsCostTotal,
     salon,
+    grossBeforeDiscount,
+    nightsDiscountPct,
+    headcountDiscountPct,
+    discountAmount,
+    subtotalAfterDiscounts,
     mealTierLabel,
     mealSurchargeTotal,
     extraMealsCount,
     extraMealsTotal,
-    subtotalBeforeDiscounts,
-    nightsDiscountPct,
-    headcountDiscountPct,
-    totalDiscountPct,
-    discountAmount,
-    subtotalAfterDiscounts,
+    cashTotalWithAddons,
     ivaPct,
     ivaAmount,
     salonAdjustmentAmount,

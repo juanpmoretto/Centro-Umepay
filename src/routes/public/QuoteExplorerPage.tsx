@@ -46,9 +46,9 @@ export function QuoteExplorerPage() {
         setQuote(row);
         setNights(row.retreat_nights);
         setMix(
-          row.accommodation_mix.map((m: { accommodation_type_id: string; people_assigned: number }) => ({
+          row.accommodation_mix.map((m: { accommodation_type_id: string; units: number }) => ({
             accommodationTypeId: m.accommodation_type_id,
-            peopleAssigned: m.people_assigned,
+            units: m.units,
           })),
         );
         setMealTierId(row.meal_tier_id);
@@ -93,10 +93,10 @@ export function QuoteExplorerPage() {
       quote_id: quote.id,
       adjusted_nights: nights,
       adjusted_headcount: result.totalPeople,
-      adjusted_accommodation_mix: mix.map((m) => ({
-        accommodation_type_id: m.accommodationTypeId,
-        units: 1,
-        people_assigned: m.peopleAssigned,
+      adjusted_accommodation_mix: result.accommodationLines.map((line) => ({
+        accommodation_type_id: line.accommodationTypeId,
+        units: line.units,
+        people_assigned: line.peopleAssigned,
       })),
       adjusted_meal_tier_id: mealTierId,
       adjusted_extra_meals_count: extraMealsCount,

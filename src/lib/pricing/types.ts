@@ -22,7 +22,8 @@ export interface PricingConfig {
 
 export interface AccommodationMixInput {
   accommodationTypeId: string;
-  peopleAssigned: number;
+  /** how many units of this specific occupancy configuration (e.g. 2 "cuádruple" cabins) */
+  units: number;
 }
 
 export interface ManualAdjustment {
@@ -48,8 +49,10 @@ export interface QuoteInput {
 export interface AccommodationMixLine {
   accommodationTypeId: string;
   label: string;
+  units: number;
+  capacity: number;
   peopleAssigned: number;
-  pricePerPersonPerNight: number;
+  combinedRatePerNight: number;
   lineTotal: number;
 }
 
@@ -68,7 +71,24 @@ export interface QuoteResult {
   accommodationLines: AccommodationMixLine[];
   baseAccommodationTotal: number;
 
+  /** Salon usage, charged every night for the whole group (not per person). */
+  salonCostTotal: number;
+  /** "Apoyo difusión y logística", a single fixed fee for the whole stay (not per night). */
+  logisticsCostTotal: number;
+
   salon: SalonAssignment;
+
+  /** accommodation + salon + logistics, before any discount */
+  grossBeforeDiscount: number;
+
+  /** Display percentages -- the real combination is MULTIPLICATIVE
+   * (sequential), not additive: total multiplier = nightsMult * headcountMult. */
+  nightsDiscountPct: number;
+  headcountDiscountPct: number;
+  discountAmount: number;
+  /** grossBeforeDiscount with both discounts applied, before meal add-ons
+   * (which are never discounted -- confirmed via the real formula). */
+  subtotalAfterDiscounts: number;
 
   mealTierLabel: string | null;
   mealSurchargeTotal: number;
@@ -76,13 +96,8 @@ export interface QuoteResult {
   extraMealsCount: number;
   extraMealsTotal: number;
 
-  subtotalBeforeDiscounts: number;
-
-  nightsDiscountPct: number;
-  headcountDiscountPct: number;
-  totalDiscountPct: number;
-  discountAmount: number;
-  subtotalAfterDiscounts: number;
+  /** subtotalAfterDiscounts + meal add-ons, the base the IVA split applies to */
+  cashTotalWithAddons: number;
 
   ivaPct: number;
   ivaAmount: number;

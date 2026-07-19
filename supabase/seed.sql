@@ -1,48 +1,59 @@
--- Phase 2 placeholder pricing data.
+-- Real pricing data, extracted directly from the master "cotizador" tab's
+-- actual cell formulas (not just its displayed values) in the Centro Umepay
+-- Google Sheet. See supabase/migrations/0012_real_formula_fix.sql for the
+-- full derivation notes.
 --
--- IMPORTANT: these are illustrative example numbers for local development and
--- UI testing only -- NOT real Centro Umepay rates. The master spreadsheet's
--- real numbers vary by season/event and are internally inconsistent across
--- ad-hoc quote copies, so guessing at "the real price" here would risk
--- shipping wrong numbers to a real client. Before Phase 2 goes live with
--- actual clients, either hand-enter the current real rates here from the
--- master sheet, or wait for the Phase 3 Google Sheets sync (supabase/functions/
--- sync-pricing) to populate these tables for real.
+-- Known simplification: these are the master template's "current" rates,
+-- used as a single flat season. Real seasonal variation is confirmed to
+-- exist (spot-checked against the SEP-OCT26 tab, whose per-unit rates
+-- differ meaningfully from this master template) -- extract per-month rates
+-- or wire up the Phase 3 Google Sheets sync (supabase/functions/sync-pricing)
+-- for full seasonal accuracy.
 
 insert into pricing_seasons (name, start_date, end_date, sort_order) values
-  ('Temporada Alta (Oct-Ene)', '2026-10-01', '2027-01-31', 1),
-  ('Temporada Media (Feb-Jun)', '2026-02-01', '2026-06-30', 2),
-  ('Temporada Baja (Jul-Sep)', '2026-07-01', '2026-09-30', 3);
+  ('Temporada actual', '2020-01-01', '2035-12-31', 1);
 
+-- Each row is a specific occupancy configuration with a FIXED capacity
+-- (min_capacity = max_capacity) -- e.g. a "cuádruple" cabin is a distinct
+-- selectable line from a "doble", not the same room priced per head.
 insert into accommodation_types (code, label, min_capacity, max_capacity, total_units, bathroom_type, sort_order) values
-  ('carpa', 'Carpa', 1, 2, 10, 'exterior', 1),
-  ('trailer_1', 'Trailer individual', 1, 1, 8, 'exterior', 2),
-  ('trailer_2', 'Trailer doble', 2, 2, 8, 'exterior', 3),
-  ('cabana_int', 'Cabaña con baño interior', 1, 4, 5, 'interior', 4),
-  ('cabana_ext', 'Cabaña con baño exterior', 4, 6, 3, 'exterior', 5);
+  ('carpa', 'Carpa', 1, 1, 10, 'exterior', 1),
+  ('trailer_x1', 'Trailer individual', 1, 1, 8, 'exterior', 2),
+  ('trailer_x2', 'Trailer doble', 2, 2, 8, 'exterior', 3),
+  ('cabint_individual', 'Cabaña con baño interior · individual', 1, 1, 5, 'interior', 4),
+  ('cabint_doble', 'Cabaña con baño interior · doble', 2, 2, 5, 'interior', 5),
+  ('cabint_triple', 'Cabaña con baño interior · triple', 3, 3, 5, 'interior', 6),
+  ('cabint_cuadruple', 'Cabaña con baño interior · cuádruple', 4, 4, 5, 'interior', 7),
+  ('cabext_individual', 'Cabaña con baño exterior · individual', 1, 1, 3, 'exterior', 8),
+  ('cabext_doble', 'Cabaña con baño exterior · doble', 2, 2, 3, 'exterior', 9),
+  ('cabext_triple', 'Cabaña con baño exterior · triple', 3, 3, 3, 'exterior', 10),
+  ('cabext_cuadruple', 'Cabaña con baño exterior · cuádruple', 4, 4, 3, 'exterior', 11),
+  ('cabext_quintuple', 'Cabaña con baño exterior · quíntuple', 5, 5, 3, 'exterior', 12),
+  ('cabext_sextuple', 'Cabaña con baño exterior · séxtuple', 6, 6, 3, 'exterior', 13);
 
--- price_per_person_per_night, illustrative only (see note above)
-insert into accommodation_rates (season_id, accommodation_type_id, price_per_person_per_night)
-select s.id, a.code_id, v.price
+-- combined_rate_per_night: TOTAL per night for the whole unit at that
+-- occupancy, already including its base vegetarian food (confirmed via the
+-- real formula: lodging + food, where food scales linearly with occupancy
+-- but lodging does not -- a "cuádruple" isn't 4x an "individual").
+insert into accommodation_rates (season_id, accommodation_type_id, combined_rate_per_night)
+select s.id, t.id, v.rate
 from (values
-  ('Temporada Alta (Oct-Ene)', 'carpa', 25000),
-  ('Temporada Alta (Oct-Ene)', 'trailer_1', 35000),
-  ('Temporada Alta (Oct-Ene)', 'trailer_2', 30000),
-  ('Temporada Alta (Oct-Ene)', 'cabana_int', 45000),
-  ('Temporada Alta (Oct-Ene)', 'cabana_ext', 40000),
-  ('Temporada Media (Feb-Jun)', 'carpa', 20000),
-  ('Temporada Media (Feb-Jun)', 'trailer_1', 28000),
-  ('Temporada Media (Feb-Jun)', 'trailer_2', 24000),
-  ('Temporada Media (Feb-Jun)', 'cabana_int', 36000),
-  ('Temporada Media (Feb-Jun)', 'cabana_ext', 32000),
-  ('Temporada Baja (Jul-Sep)', 'carpa', 17000),
-  ('Temporada Baja (Jul-Sep)', 'trailer_1', 24000),
-  ('Temporada Baja (Jul-Sep)', 'trailer_2', 20000),
-  ('Temporada Baja (Jul-Sep)', 'cabana_int', 30000),
-  ('Temporada Baja (Jul-Sep)', 'cabana_ext', 27000)
-) as v(season_name, code, price)
-join pricing_seasons s on s.name = v.season_name
-join (select id as code_id, code from accommodation_types) a on a.code = v.code;
+  ('carpa', 70660.35),
+  ('trailer_x1', 107758.88),
+  ('trailer_x2', 169464.41),
+  ('cabint_individual', 242081.12),
+  ('cabint_doble', 307624.44),
+  ('cabint_triple', 373167.75),
+  ('cabint_cuadruple', 438711.07),
+  ('cabext_individual', 186159.21),
+  ('cabext_doble', 250057.76),
+  ('cabext_triple', 311763.30),
+  ('cabext_cuadruple', 373468.83),
+  ('cabext_quintuple', 435174.37),
+  ('cabext_sextuple', 496879.90)
+) as v(code, rate)
+join accommodation_types t on t.code = v.code
+join pricing_seasons s on s.name = 'Temporada actual';
 
 insert into meal_surcharge_tiers (code, label, protein_tier, surcharge_per_person_total, sort_order) values
   ('lunch_only', 'Solo almuerzo con carne (Item 200g)', 'item_200g', 8000, 1),
@@ -63,11 +74,17 @@ insert into discount_tiers_headcount (min_people, discount_pct) values
   (26, 6),
   (41, 10);
 
--- flat_adjustment: Nave's salon cost is already folded into the per-person
--- accommodation rates above, so it gets no further adjustment. Nodriza gets
--- a flat discount off the retreat's final total (confirmed by Umepay staff).
+-- flat_adjustment: Nave's salon usage is already covered by the fixed
+-- salon_per_day/logistics_flat costs below (charged on every quote).
+-- Nodriza gets a flat discount off the retreat's final total (confirmed by
+-- Umepay staff, matches the "DESCUENTO por uso de salon Nodriza" line found
+-- in several real per-event budget tabs).
 insert into salon_thresholds (salon_code, label, min_people, max_people, long_weekend_min_nights, long_weekend_min_people, flat_adjustment) values
   ('nave', 'Nave', 16, null, 3, 20, 0),
   ('nodriza', 'Nodriza', 8, 14, null, null, -250000);
 
-insert into pricing_settings (id, iva_pct, deposit_pct, extra_meal_price) values (true, 21, 30, 24485);
+-- salon_per_day and logistics_flat are real, confirmed values (B43/E43 in
+-- the master tab): salon usage is charged per night, logistics is a single
+-- fixed fee for the whole stay regardless of length.
+insert into pricing_settings (id, iva_pct, deposit_pct, extra_meal_price, salon_per_day, logistics_flat) values
+  (true, 21, 30, 24485.2, 58557.23, 50017.95);
