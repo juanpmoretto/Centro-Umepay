@@ -71,7 +71,7 @@ function assignSalon(
   };
 }
 
-/** 1, 0.9, 0.8 or 0.7 -- multiplies the subtotal, it is not a "% off" to add to anything else. */
+/** 1, 0.97, 0.95 or 0.9 -- multiplies the subtotal, it is not a "% off" to add to anything else. */
 function nightsMultiplierFor(config: PricingConfig, nights: number): number {
   const tier = config.nightsDiscounts.find(
     (t) => nights >= t.min_nights && (t.max_nights == null || nights <= t.max_nights),
@@ -87,24 +87,41 @@ function headcountMultiplierFor(config: PricingConfig, totalPeople: number): num
 }
 
 /**
- * Pure, side-effect-free quote calculator, rebuilt directly from the actual
- * cell formulas in the Centro Umepay master "cotizador" spreadsheet tab
- * (not just its displayed values). Key points confirmed against that sheet:
+ * Pure, side-effect-free quote calculator. Rebuilt from the actual cell
+ * formulas of the real monthly "cotizador" tabs that Centro Umepay staff
+ * currently use to quote clients (JULIO-AGOSTO..ENE-FEB27) -- NOT the older,
+ * generic "cotizador" master template, which computes differently and is no
+ * longer how real quotes are built. Verified peso-for-peso against a
+ * controlled side-by-side test (5x trailer individual + 1x cabaña interior
+ * cuádruple + 1x cabaña exterior cuádruple, 13 personas, 2 noches,
+ * Julio-Agosto 2026): reproduces the real spreadsheet's $3,847,162
+ * pre-split subtotal and $3,308,560 final total exactly.
  *
+ * Key points, all confirmed against that real formula:
  * - Accommodation is priced per whole unit/configuration (e.g. a "cuádruple"
  *   cabin has one combined rate for the whole cabin), not a flat per-person
- *   rate -- see accommodationRates.combined_rate_per_night. That combined
- *   rate already includes the configuration's base vegetarian food.
- * - Salon usage (per night) and "apoyo difusión y logística" (once per
- *   stay) are fixed costs present on every quote.
+ *   rate. That combined rate already includes the configuration's base
+ *   vegetarian food.
+ * - IVA (21%) is applied PER ACCOMMODATION LINE (units * rate * nights *
+ *   1.21) -- not as a separate 50%-of-subtotal step at the end. There is no
+ *   separate "logística" fee in the real monthly tabs (only the old master
+ *   template had one).
+ * - Salon usage (salon_per_day * nights / totalPeople) is added once for
+ *   EACH DISTINCT accommodation line with a nonzero quantity -- an unusual
+ *   quirk of the real sheet, but verified to reproduce it exactly.
  * - The nights discount and the headcount discount combine MULTIPLICATIVELY
  *   (sequential), not additively.
  * - Meal add-ons (carne surcharge, extra standalone meals) are NOT
- *   discounted -- they're added after both discounts, then the whole thing
- *   goes through the standard 50%-with-IVA / 50%-without-IVA split.
+ *   discounted -- they're added after both discounts.
+ * - The final total is NOT a 50/50 transfer-vs-cash split: it's
+ *   deposit_pct% paid as a seña (no discount) + the rest paid in cash on
+ *   arrival with a cash_discount_pct% discount. Both intermediate amounts
+ *   (deposit + balance) sum exactly to the total, by construction.
  */
 export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteResult {
   const season = resolveSeason(config, input.retreatStartDate);
+  const ivaPct = config.settings.iva_pct;
+  const ivaMultiplier = 1 + ivaPct / 100;
 
   const accommodationLines = input.accommodationMix.map((entry) => {
     const accType = config.accommodationTypes.find((a) => a.id === entry.accommodationTypeId);
@@ -119,7 +136,7 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     }
     const capacity = accType.max_capacity;
     const peopleAssigned = entry.units * capacity;
-    const lineTotal = entry.units * rate.combined_rate_per_night * input.nights;
+    const lineTotal = entry.units * rate.combined_rate_per_night * input.nights * ivaMultiplier;
     return {
       accommodationTypeId: accType.id,
       label: accType.label,
@@ -131,6 +148,7 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     };
   });
 
+  const nonzeroLines = accommodationLines.filter((l) => l.units > 0);
   const baseAccommodationTotal = round(accommodationLines.reduce((sum, l) => sum + l.lineTotal, 0));
   const totalPeople = accommodationLines.reduce((sum, l) => sum + l.peopleAssigned, 0);
 
@@ -142,9 +160,9 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     input.longWeekendDates ?? [],
   );
 
-  const salonCostTotal = round(season.salon_per_day * input.nights);
-  const logisticsCostTotal = round(config.settings.logistics_flat);
-  const grossBeforeDiscount = baseAccommodationTotal + salonCostTotal + logisticsCostTotal;
+  const salonSharePerLine = totalPeople > 0 ? (season.salon_per_day * input.nights) / totalPeople : 0;
+  const salonCostTotal = round(salonSharePerLine * nonzeroLines.length);
+  const grossBeforeDiscount = baseAccommodationTotal + salonCostTotal;
 
   const nightsMultiplier = nightsMultiplierFor(config, input.nights);
   const headcountMultiplier = headcountMultiplierFor(config, totalPeople);
@@ -168,27 +186,21 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
   const extraMealsCount = input.extraMealsCount ?? 0;
   const extraMealsTotal = round(extraMealsCount * config.settings.extra_meal_price);
 
-  const cashTotalWithAddons = subtotalAfterDiscounts + mealSurchargeTotal + extraMealsTotal;
-
-  // Standard payment condition: 50% by bank transfer (with IVA) + 50% cash
-  // (without IVA). Confirmed against a real Umepay quote example (21% IVA on
-  // exactly 50% of the subtotal reproduces the real transfer-vs-cash totals),
-  // so this is fixed, not a client-facing toggle.
-  const ivaPct = config.settings.iva_pct;
-  const ivaAmount = round(cashTotalWithAddons * 0.5 * (ivaPct / 100));
-
-  // Salon adjustment (Nodriza's flat discount) and any staff-entered
-  // exception both apply to the final total, per Umepay's own framing
-  // ("discount X off the retreat's total"), not to the pre-IVA subtotal.
   const salonAdjustmentAmount = salon.flatAdjustment;
   const manualAdjustmentAmount = input.manualAdjustment?.amount ?? 0;
   const manualAdjustmentNote = input.manualAdjustment?.note ?? null;
 
-  const total = cashTotalWithAddons + ivaAmount + salonAdjustmentAmount + manualAdjustmentAmount;
+  const adjustedTotal =
+    subtotalAfterDiscounts + mealSurchargeTotal + extraMealsTotal + salonAdjustmentAmount + manualAdjustmentAmount;
 
+  // Confirmed real payment structure (not a 50/50 transfer-vs-cash split):
+  // deposit_pct% as seña at face value, the rest paid in cash on arrival
+  // with a cash_discount_pct% discount.
   const depositPct = config.settings.deposit_pct;
-  const depositAmount = round(total * (depositPct / 100));
-  const balanceOnArrival = total - depositAmount;
+  const cashDiscountPct = config.settings.cash_discount_pct;
+  const depositAmount = round(adjustedTotal * (depositPct / 100));
+  const balanceOnArrival = round(adjustedTotal * (1 - depositPct / 100) * (1 - cashDiscountPct / 100));
+  const total = depositAmount + balanceOnArrival;
 
   return {
     seasonName: season.name,
@@ -196,8 +208,8 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     nights: input.nights,
     accommodationLines,
     baseAccommodationTotal,
+    ivaPct,
     salonCostTotal,
-    logisticsCostTotal,
     salon,
     grossBeforeDiscount,
     nightsDiscountPct,
@@ -208,15 +220,14 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     mealSurchargeTotal,
     extraMealsCount,
     extraMealsTotal,
-    cashTotalWithAddons,
-    ivaPct,
-    ivaAmount,
+    adjustedTotal,
     salonAdjustmentAmount,
     manualAdjustmentAmount,
     manualAdjustmentNote,
-    total,
     depositPct,
+    cashDiscountPct,
     depositAmount,
     balanceOnArrival,
+    total,
   };
 }

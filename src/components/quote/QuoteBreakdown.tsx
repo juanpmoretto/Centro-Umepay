@@ -29,25 +29,22 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
         {result.accommodationLines.map((line) => (
           <div key={line.accommodationTypeId} className="flex justify-between">
             <span>
-              {line.label} · {line.units} unidad(es) × {line.capacity} pers. × {result.nights} noches
+              {line.label} · {line.units} unidad(es) × {line.capacity} pers. × {result.nights} noches (IVA
+              incluido)
             </span>
             <span>{formatARS(line.lineTotal)}</span>
           </div>
         ))}
         <div className="flex justify-between text-muted-foreground">
-          <span>Uso de salón ({result.nights} noches)</span>
+          <span>Uso de salón</span>
           <span>{formatARS(result.salonCostTotal)}</span>
-        </div>
-        <div className="flex justify-between text-muted-foreground">
-          <span>Apoyo difusión y logística</span>
-          <span>{formatARS(result.logisticsCostTotal)}</span>
         </div>
       </div>
 
       <Separator />
 
       <div className="flex justify-between">
-        <span>Subtotal</span>
+        <span>Subtotal (IVA {result.ivaPct}% incluido en el alojamiento)</span>
         <span>{formatARS(result.grossBeforeDiscount)}</span>
       </div>
 
@@ -75,11 +72,6 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
         </div>
       )}
 
-      <div className="flex justify-between">
-        <span>IVA ({result.ivaPct}% sobre el 50% del total)</span>
-        <span>{formatARS(result.ivaAmount)}</span>
-      </div>
-
       {result.salonAdjustmentAmount !== 0 && (
         <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
           <span>Ajuste por salón {result.salon.label}</span>
@@ -102,11 +94,13 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
       </div>
 
       <div className="flex justify-between text-muted-foreground">
-        <span>Seña ({result.depositPct}%)</span>
+        <span>Seña ({result.depositPct}%, sin descuento)</span>
         <span>{formatARS(result.depositAmount)}</span>
       </div>
       <div className="flex justify-between text-muted-foreground">
-        <span>Saldo al llegar</span>
+        <span>
+          Saldo al llegar (en efectivo, {result.cashDiscountPct}% de descuento incluido)
+        </span>
         <span>{formatARS(result.balanceOnArrival)}</span>
       </div>
     </div>

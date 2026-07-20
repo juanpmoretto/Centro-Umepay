@@ -110,11 +110,13 @@ export interface SalonThresholdRow {
 
 export interface PricingSettingsRow {
   id: true;
+  /** Applied per accommodation line (units * rate * nights * (1 + iva_pct/100)), not as a separate final step. */
   iva_pct: number;
+  /** Both the seña fraction AND the "paid up front" share of the final 30/70 payment split. */
   deposit_pct: number;
   extra_meal_price: number;
-  /** Charged once per stay regardless of how many nights (not per night). */
-  logistics_flat: number;
+  /** Discount on the remaining (100-deposit_pct)% paid in cash on arrival. */
+  cash_discount_pct: number;
   synced_at: string;
 }
 

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc -b *)",
+      "Bash(npm run test)",
+      "Bash(npm run build)",
+      "mcp__Claude_Preview__preview_screenshot",
+      "mcp__Claude_Preview__preview_console_logs",
+      "mcp__Claude_Preview__preview_snapshot",
+      "mcp__Claude_Preview__preview_start",
+      "mcp__5dd8d89e-c6de-4d57-b4e5-fc6254273251__download_file_content"
+    ]
+  }
+}

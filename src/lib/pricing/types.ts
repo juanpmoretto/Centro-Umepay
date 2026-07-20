@@ -53,6 +53,7 @@ export interface AccommodationMixLine {
   capacity: number;
   peopleAssigned: number;
   combinedRatePerNight: number;
+  /** units * combinedRatePerNight * nights * (1 + ivaPct/100) -- IVA is baked in per line. */
   lineTotal: number;
 }
 
@@ -68,17 +69,20 @@ export interface QuoteResult {
   totalPeople: number;
   nights: number;
 
+  /** Already IVA-inclusive (see AccommodationMixLine.lineTotal). */
   accommodationLines: AccommodationMixLine[];
   baseAccommodationTotal: number;
+  ivaPct: number;
 
-  /** Salon usage, charged every night for the whole group (not per person). */
+  /** Salon usage: salon_per_day * nights / totalPeople, added once for each
+   * DISTINCT accommodation line with a nonzero quantity -- confirmed via a
+   * real side-by-side test against the spreadsheet, an unusual quirk but
+   * verified to reproduce the real numbers exactly. */
   salonCostTotal: number;
-  /** "Apoyo difusión y logística", a single fixed fee for the whole stay (not per night). */
-  logisticsCostTotal: number;
 
   salon: SalonAssignment;
 
-  /** accommodation + salon + logistics, before any discount */
+  /** accommodation (IVA-inclusive) + salon, before any discount */
   grossBeforeDiscount: number;
 
   /** Display percentages -- the real combination is MULTIPLICATIVE
@@ -96,19 +100,20 @@ export interface QuoteResult {
   extraMealsCount: number;
   extraMealsTotal: number;
 
-  /** subtotalAfterDiscounts + meal add-ons, the base the IVA split applies to */
-  cashTotalWithAddons: number;
-
-  ivaPct: number;
-  ivaAmount: number;
+  /** subtotalAfterDiscounts + meal add-ons + any salon/manual adjustment --
+   * this is the base the final 30/70 payment split applies to. */
+  adjustedTotal: number;
 
   salonAdjustmentAmount: number;
   manualAdjustmentAmount: number;
   manualAdjustmentNote: string | null;
 
-  total: number;
-
+  /** Confirmed real payment structure: deposit_pct paid as seña (no discount),
+   * the rest paid in cash on arrival with a cash_discount_pct discount --
+   * NOT a 50/50 transfer-vs-cash split. total = depositAmount + balanceOnArrival. */
   depositPct: number;
+  cashDiscountPct: number;
   depositAmount: number;
   balanceOnArrival: number;
+  total: number;
 }

@@ -3,13 +3,13 @@
 -- bimonthly pricing periods found in the sheet (Jul 2025 through Feb 2027) --
 -- Centro Umepay re-prices roughly every two months to track inflation, this
 -- is not a summer/winter seasonal split. See supabase/migrations/
--- 0012_real_formula_fix.sql and 0013_seasonal_rates.sql for full derivation
--- notes.
+-- 0012_real_formula_fix.sql, 0013_seasonal_rates.sql and
+-- 0014_verified_real_formula.sql for full derivation notes.
 --
--- Known simplification: no separate per-season "logística" fixed fee was
--- found in the dated tabs (only the generic master template has one) --
--- kept as a single global value (pricing_settings.logistics_flat) for every
--- period.
+-- The rates below (per season, per accommodation config) are unaffected by
+-- 0014 -- only the formula that combines them changed (IVA applied per
+-- line, no separate logística fee, 30%-seña/70%-cash-with-discount split
+-- instead of a 50/50 transfer/cash split).
 
 insert into pricing_seasons (name, start_date, end_date, salon_per_day, sort_order) values
   ('Julio-Agosto 2025', '2025-07-01', '2025-08-31', 150000, 1),
@@ -201,9 +201,9 @@ insert into meal_surcharge_tiers (code, label, protein_tier, surcharge_per_perso
 
 insert into discount_tiers_nights (min_nights, max_nights, discount_pct) values
   (1, 2, 0),
-  (3, 4, 10),
-  (5, 10, 20),
-  (11, null, 30);
+  (3, 4, 3),
+  (5, 9, 5),
+  (10, null, 10);
 
 insert into discount_tiers_headcount (min_people, discount_pct) values
   (16, 3),
@@ -211,13 +211,13 @@ insert into discount_tiers_headcount (min_people, discount_pct) values
   (41, 10);
 
 -- flat_adjustment: Nave's salon usage is already covered by the fixed
--- salon_per_day (per season, above) + logistics_flat costs (charged on
--- every quote). Nodriza gets a flat discount off the retreat's final total
+-- salon_per_day (per season, above), charged on every quote. Nodriza gets
+-- a flat discount off the retreat's final total
 -- (confirmed by Umepay staff, matches the "DESCUENTO por uso de salon
 -- Nodriza" line found in several real per-event budget tabs).
 insert into salon_thresholds (salon_code, label, min_people, max_people, long_weekend_min_nights, long_weekend_min_people, flat_adjustment) values
   ('nave', 'Nave', 16, null, 3, 20, 0),
   ('nodriza', 'Nodriza', 8, 14, null, null, -250000);
 
-insert into pricing_settings (id, iva_pct, deposit_pct, extra_meal_price, logistics_flat) values
-  (true, 21, 30, 24485.2, 50017.95);
+insert into pricing_settings (id, iva_pct, deposit_pct, extra_meal_price, cash_discount_pct) values
+  (true, 21, 30, 24485.2, 20);

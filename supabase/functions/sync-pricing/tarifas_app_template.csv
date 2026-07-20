@@ -60,9 +60,9 @@ full,Todas las comidas con carne (Premium 400g),premium_400g,32000
 ### DISCOUNTS_NIGHTS
 min_nights,max_nights,discount_pct
 1,2,0
-3,4,10
-5,10,20
-11,,30
+3,4,3
+5,9,5
+10,,10
 
 ### DISCOUNTS_HEADCOUNT
 min_people,discount_pct
@@ -79,5 +79,5 @@ nodriza,Nodriza,8,14,,,-250000
 key,value
 iva_pct,21
 deposit_pct,30
+cash_discount_pct,20
 extra_meal_price,24485.2
-logistics_flat,50017.95
