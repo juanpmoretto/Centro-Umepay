@@ -191,9 +191,16 @@ function calculateMealAddon(
  * - Nights discount tiers are per-season (one season currently has a unique
  *   promo at the 5-9 night tier).
  * - Salon usage (salon_per_day * nights / totalPeople) is added once for
- *   EACH DISTINCT accommodation line with a nonzero quantity.
+ *   EACH DISTINCT accommodation line with a nonzero quantity, PLUS one more
+ *   if "liberados" applies (the Excel's "trailer descuento" row is its own
+ *   distinct type for this purpose, even though it isn't a paid line).
  * - "Liberados": 16+ pax groups get a bonification (subtracted) equal to
- *   1-3x the cost of a "trailer x1" line, tiered by headcount.
+ *   1-3x the FULL cost (lodging + food, not just lodging) of a "trailer x1"
+ *   line for that stay, tiered by headcount -- the same price a paying
+ *   trailer guest would be charged.
+ * - Salon/manual adjustments (e.g. Nodriza's flat discount) apply BEFORE the
+ *   seña/saldo split, not after TOTAL A COBRAR -- otherwise the saldo's cash
+ *   discount never reaches them.
  * - The final payment split is fixed: 30% seña (no discount) + 70% paid in
  *   cash on arrival with a 20% discount -- not a 50/50 transfer/cash split.
  * - The carne addon (200g/400g) is computed via a fixed formula from each
@@ -248,8 +255,15 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
   );
   const capacityWarnings = checkCapacityWarnings(config, input.accommodationMix);
 
+  // "Liberados" (a free trailer bonification for 16+ pax) is its own distinct
+  // row in the Excel ("trailer descuento"), separate from any paid
+  // accommodation line -- so it counts as ONE MORE distinct type for the
+  // salon prorateo below, even though it isn't part of accommodationMix.
+  const liberadosMultiplier = liberadosMultiplierFor(config, totalPeople);
+  const salonLineCount = nonzeroLines.length + (liberadosMultiplier > 0 ? 1 : 0);
+
   const salonSharePerLine = totalPeople > 0 ? (season.salon_per_day * input.nights) / totalPeople : 0;
-  const salonCostTotal = round(salonSharePerLine * nonzeroLines.length);
+  const salonCostTotal = round(salonSharePerLine * salonLineCount);
 
   const grossBeforeDiscount = accommodationTotal + foodTotal + salonCostTotal;
 
@@ -262,10 +276,15 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
   const trailerX1Rate = trailerX1
     ? config.accommodationRates.find((r) => r.season_id === season.id && r.accommodation_type_id === trailerX1.id)
     : undefined;
-  const liberadosMultiplier = liberadosMultiplierFor(config, totalPeople);
-  const liberadosUnitCost = trailerX1Rate
-    ? round(trailerX1Rate.lodging_rate_per_night * ivaMultiplier * input.nights + salonSharePerLine)
+  // Full cost of one trailer x1 for this stay (lodging + food, both
+  // IVA-inclusive) -- the same price a paying guest in that trailer would be
+  // charged. NOT the salon share: the salon prorateo is already counted
+  // separately above via salonLineCount.
+  const liberadosLodging = trailerX1Rate ? trailerX1Rate.lodging_rate_per_night * ivaMultiplier * input.nights : 0;
+  const liberadosFood = trailerX1
+    ? season.food_price_per_person_per_night * trailerX1.max_capacity * ivaMultiplier * input.nights
     : 0;
+  const liberadosUnitCost = round(liberadosLodging + liberadosFood);
   const liberadosDiscountAmount = liberadosMultiplier * liberadosUnitCost;
 
   const totalDiscounts = nightsDiscountAmount + headcountDiscountAmount + liberadosDiscountAmount;

@@ -222,25 +222,62 @@ describe('calculateQuote', () => {
     expect(twoTypes.salonCostTotal).toBe(Math.round(salonShareTwoTypes * 2));
   });
 
-  it('subtracts a "liberados" bonification for 16+ pax that DOES scale with nights (unlike the other two discounts)', () => {
+  it('subtracts a "liberados" bonification for 16+ pax equal to the FULL cost (lodging + food) of a trailer x1, and counts it as one more distinct type for the salon prorateo', () => {
+    // Regression test for a real reported bug, confirmed against the master
+    // Excel: 1 trailer x1 (paid) + 4 "cuádruple" cabins = 17 pax, 2 nights,
+    // JUL-AGO26. The Excel's "trailer descuento" row is a distinct type of
+    // its own for salon prorateo purposes (3 types: trailer descuento,
+    // trailer x1, cabaña cuádruple), even though it isn't a paid line.
     const config = buildConfig();
-    const result16 = calculateQuote(
-      { retreatStartDate: '2026-08-10', nights: 3, accommodationMix: [{ accommodationTypeId: TRAILER_ID, units: 16 }], mealPlan: null },
-      config,
-    );
-    const result15 = calculateQuote(
-      { retreatStartDate: '2026-08-10', nights: 3, accommodationMix: [{ accommodationTypeId: TRAILER_ID, units: 15 }], mealPlan: null },
+    const result = calculateQuote(
+      {
+        retreatStartDate: '2026-08-10',
+        nights: 2,
+        accommodationMix: [
+          { accommodationTypeId: TRAILER_ID, units: 1 },
+          { accommodationTypeId: CABINT_QUAD_ID, units: 4 },
+        ],
+        mealPlan: null,
+      },
       config,
     );
 
-    expect(result15.liberadosMultiplier).toBe(0);
-    expect(result16.liberadosMultiplier).toBe(1); // 16-23 pax tier
-    // Unlike nightsDiscountAmount/headcountDiscountAmount, this one scales
-    // with nights: unitCost = trailer_x1 lodging*IVA*nights + its own salon share.
-    const expectedUnitCost = Math.round(TRAILER_LODGING * 1.21 * 3 + (SALON_PER_DAY * 3) / 16);
-    expect(result16.liberadosUnitCost).toBe(expectedUnitCost);
-    expect(result16.liberadosDiscountAmount).toBe(expectedUnitCost);
-    expect(result16.subtotalAfterDiscounts).toBe(result16.grossBeforeDiscount - result16.totalDiscounts);
+    expect(result.totalPeople).toBe(17);
+    expect(result.liberadosMultiplier).toBe(1); // 16-23 pax tier
+
+    // Full cost of one trailer x1 for 2 nights (lodging + food, IVA
+    // included) -- NOT lodging + salon share as before the fix.
+    const expectedUnitCost = Math.round(TRAILER_LODGING * 1.21 * 2 + FOOD_PP * 1.21 * 2);
+    expect(expectedUnitCost).toBe(296341); // confirmed reference value from the bug report
+    expect(result.liberadosUnitCost).toBe(expectedUnitCost);
+    expect(result.liberadosDiscountAmount).toBe(expectedUnitCost);
+
+    // Salon prorateo counts 3 distinct types here (trailer descuento + trailer
+    // x1 + cabaña cuádruple), not just the 2 real accommodationMix lines.
+    const salonSharePerLine = (SALON_PER_DAY * 2) / 17;
+    expect(result.salonCostTotal).toBe(Math.round(salonSharePerLine * 3));
+    expect(Math.abs(result.salonCostTotal - 64058.82)).toBeLessThan(2); // confirmed reference value
+
+    expect(result.subtotalAfterDiscounts).toBe(result.grossBeforeDiscount - result.totalDiscounts);
+  });
+
+  it('does NOT add an extra salon-prorateo type when no liberados bonification applies', () => {
+    const config = buildConfig();
+    const result = calculateQuote(
+      {
+        retreatStartDate: '2026-08-10',
+        nights: 2,
+        accommodationMix: [
+          { accommodationTypeId: TRAILER_ID, units: 1 },
+          { accommodationTypeId: CABINT_INDIVIDUAL_ID, units: 1 },
+        ],
+        mealPlan: null,
+      },
+      config,
+    );
+    expect(result.liberadosMultiplier).toBe(0);
+    const salonSharePerLine = (SALON_PER_DAY * 2) / result.totalPeople;
+    expect(result.salonCostTotal).toBe(Math.round(salonSharePerLine * 2)); // still just the 2 real lines
   });
 
   it('splits the final total as 30% seña (no discount) + 70% cash with a 20% discount', () => {
