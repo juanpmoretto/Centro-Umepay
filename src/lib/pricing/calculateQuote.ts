@@ -193,11 +193,16 @@ function calculateMealAddon(
  * - Salon usage (salon_per_day * nights / totalPeople) is added once for
  *   EACH DISTINCT accommodation line with a nonzero quantity, PLUS one more
  *   if "liberados" applies (the Excel's "trailer descuento" row is its own
- *   distinct type for this purpose, even though it isn't a paid line).
- * - "Liberados": 16+ pax groups get a bonification (subtracted) equal to
- *   1-3x the FULL cost (lodging + food, not just lodging) of a "trailer x1"
- *   line for that stay, tiered by headcount -- the same price a paying
- *   trailer guest would be charged.
+ *   distinct type for this purpose, even when the SAME accommodation type
+ *   also has paid units, even though it isn't a paid line).
+ * - "Liberados" (free trailer(s) for 16+ PAID pax, tier based on paid pax
+ *   only): each freed trailer is billed EXACTLY like a paid one -- its full
+ *   cost (lodging + food, IVA-inclusive) is counted normally in the gross
+ *   total AND in the nights/headcount discount basis -- and only then
+ *   subtracted back out in full as a separate "Bonificación liberados" step.
+ *   This is NOT equivalent to simply never counting it: the gross-up makes
+ *   the nights/headcount discounts (which apply to the WHOLE group's
+ *   lodging, including the freed trailer) come out larger.
  * - Salon/manual adjustments (e.g. Nodriza's flat discount) apply BEFORE the
  *   seña/saldo split, not after TOTAL A COBRAR -- otherwise the saldo's cash
  *   discount never reaches them.
@@ -241,10 +246,13 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
   });
 
   const nonzeroLines = accommodationLines.filter((l) => l.units > 0);
+  // "totalPeople" and the paid-only subtotals below intentionally exclude any
+  // freed trailer -- the liberados tier lookup is based on PAID pax, not
+  // counting the freed trailer's own occupants.
   const totalPeople = accommodationLines.reduce((sum, l) => sum + l.peopleAssigned, 0);
-  const accommodationTotal = round(accommodationLines.reduce((sum, l) => sum + l.lodgingLineTotal, 0));
-  const foodTotal = round(accommodationLines.reduce((sum, l) => sum + l.foodLineTotal, 0));
-  const lodgingOneNightTotal = round(accommodationLines.reduce((sum, l) => sum + l.lodgingOneNight, 0));
+  const accommodationTotalPaid = round(accommodationLines.reduce((sum, l) => sum + l.lodgingLineTotal, 0));
+  const foodTotalPaid = round(accommodationLines.reduce((sum, l) => sum + l.foodLineTotal, 0));
+  const lodgingOneNightTotalPaid = round(accommodationLines.reduce((sum, l) => sum + l.lodgingOneNight, 0));
 
   const salon = assignSalon(
     config,
@@ -255,11 +263,35 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
   );
   const capacityWarnings = checkCapacityWarnings(config, input.accommodationMix);
 
-  // "Liberados" (a free trailer bonification for 16+ pax) is its own distinct
-  // row in the Excel ("trailer descuento"), separate from any paid
-  // accommodation line -- so it counts as ONE MORE distinct type for the
-  // salon prorateo below, even though it isn't part of accommodationMix.
   const liberadosMultiplier = liberadosMultiplierFor(config, totalPeople);
+
+  const trailerX1 = config.accommodationTypes.find((a) => a.code === 'trailer_x1');
+  const trailerX1Rate = trailerX1
+    ? config.accommodationRates.find((r) => r.season_id === season.id && r.accommodation_type_id === trailerX1.id)
+    : undefined;
+  const trailerX1Capacity = trailerX1?.max_capacity ?? 1;
+
+  // A freed ("liberado") trailer is billed EXACTLY like a paid one, at the
+  // same rate -- so it flows through the gross total and the nights/headcount
+  // discount basis just like any other line. Only in the separate
+  // "Bonificación liberados" step below is its full cost subtracted back out.
+  const trailerLodgingForStay = trailerX1Rate ? trailerX1Rate.lodging_rate_per_night * ivaMultiplier * input.nights : 0;
+  const trailerFoodForStay = trailerX1
+    ? season.food_price_per_person_per_night * trailerX1Capacity * ivaMultiplier * input.nights
+    : 0;
+  const trailerLodgingOneNight = trailerX1Rate ? trailerX1Rate.lodging_rate_per_night * ivaMultiplier : 0;
+
+  const liberadosLodgingLineTotal = round(liberadosMultiplier * trailerLodgingForStay);
+  const liberadosFoodLineTotal = round(liberadosMultiplier * trailerFoodForStay);
+  const liberadosLodgingOneNight = round(liberadosMultiplier * trailerLodgingOneNight);
+
+  const accommodationTotal = accommodationTotalPaid + liberadosLodgingLineTotal;
+  const foodTotal = foodTotalPaid + liberadosFoodLineTotal;
+  const lodgingOneNightTotal = lodgingOneNightTotalPaid + liberadosLodgingOneNight;
+
+  // A freed trailer is its own distinct row for the salon prorateo below (the
+  // Excel's "trailer descuento" row), separate from any PAID trailer_x1 units
+  // of the same type -- even though the UI shows them merged into one line.
   const salonLineCount = nonzeroLines.length + (liberadosMultiplier > 0 ? 1 : 0);
 
   const salonSharePerLine = totalPeople > 0 ? (season.salon_per_day * input.nights) / totalPeople : 0;
@@ -272,19 +304,12 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
   const nightsDiscountAmount = round(lodgingOneNightTotal * (nightsDiscountPct / 100));
   const headcountDiscountAmount = round(lodgingOneNightTotal * (headcountDiscountPct / 100));
 
-  const trailerX1 = config.accommodationTypes.find((a) => a.code === 'trailer_x1');
-  const trailerX1Rate = trailerX1
-    ? config.accommodationRates.find((r) => r.season_id === season.id && r.accommodation_type_id === trailerX1.id)
-    : undefined;
-  // Full cost of one trailer x1 for this stay (lodging + food, both
-  // IVA-inclusive) -- the same price a paying guest in that trailer would be
-  // charged. NOT the salon share: the salon prorateo is already counted
-  // separately above via salonLineCount.
-  const liberadosLodging = trailerX1Rate ? trailerX1Rate.lodging_rate_per_night * ivaMultiplier * input.nights : 0;
-  const liberadosFood = trailerX1
-    ? season.food_price_per_person_per_night * trailerX1.max_capacity * ivaMultiplier * input.nights
-    : 0;
-  const liberadosUnitCost = round(liberadosLodging + liberadosFood);
+  // Bonificación liberados: the FULL cost (lodging + food, both IVA-inclusive)
+  // of one trailer x1 for this stay -- the same price a paying trailer guest
+  // would be charged -- subtracted back out now that it's been counted
+  // normally everywhere above (NOT a salon share: that's counted separately
+  // via salonLineCount).
+  const liberadosUnitCost = round(trailerLodgingForStay + trailerFoodForStay);
   const liberadosDiscountAmount = liberadosMultiplier * liberadosUnitCost;
 
   const totalDiscounts = nightsDiscountAmount + headcountDiscountAmount + liberadosDiscountAmount;

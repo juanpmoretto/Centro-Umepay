@@ -261,6 +261,104 @@ describe('calculateQuote', () => {
     expect(result.subtotalAfterDiscounts).toBe(result.grossBeforeDiscount - result.totalDiscounts);
   });
 
+  it('bills a freed trailer EXACTLY like a paid one in the gross total and the nights/headcount discount basis, only netting it out via "Bonificación liberados"', () => {
+    // Regression test for a real reported bug: the freed trailer must flow
+    // through the gross total, the nights-discount basis, and the
+    // headcount-discount basis normally (at full price), and only be
+    // subtracted back out in the separate "Bonificación liberados" step --
+    // NOT be silently excluded from those bases from the start.
+    const config = buildConfig();
+    const result = calculateQuote(
+      {
+        retreatStartDate: '2026-08-10',
+        nights: 2,
+        accommodationMix: [
+          { accommodationTypeId: TRAILER_ID, units: 1 },
+          { accommodationTypeId: CABINT_QUAD_ID, units: 4 },
+        ],
+        mealPlan: null,
+      },
+      config,
+    );
+
+    expect(result.totalPeople).toBe(17); // paid pax only -- the liberados tier lookup basis
+    expect(result.liberadosMultiplier).toBe(1);
+
+    const trailerLodgingForStay = TRAILER_LODGING * 1.21 * 2;
+    const trailerFoodForStay = FOOD_PP * 1 * 1.21 * 2;
+    const trailerLodgingOneNight = TRAILER_LODGING * 1.21;
+
+    const paidAccommodationTotal =
+      Math.round(1 * TRAILER_LODGING * 2 * 1.21) + Math.round(4 * CABINT_QUAD_LODGING * 2 * 1.21);
+    const paidFoodTotal = Math.round(1 * FOOD_PP * 1 * 2 * 1.21) + Math.round(4 * FOOD_PP * 4 * 2 * 1.21);
+    const paidLodgingOneNight = Math.round(1 * TRAILER_LODGING * 1.21) + Math.round(4 * CABINT_QUAD_LODGING * 1.21);
+
+    expect(result.accommodationTotal).toBe(paidAccommodationTotal + Math.round(1 * trailerLodgingForStay));
+    expect(result.foodTotal).toBe(paidFoodTotal + Math.round(1 * trailerFoodForStay));
+    expect(result.lodgingOneNightTotal).toBe(paidLodgingOneNight + Math.round(1 * trailerLodgingOneNight));
+
+    // The nights/headcount discount AMOUNTS must be computed off the
+    // grossed-up lodgingOneNightTotal (including the freed trailer), so they
+    // come out bigger than if computed off paid lines only.
+    expect(result.nightsDiscountAmount).toBe(Math.round(result.lodgingOneNightTotal * (result.nightsDiscountPct / 100)));
+    expect(result.headcountDiscountAmount).toBe(
+      Math.round(result.lodgingOneNightTotal * (result.headcountDiscountPct / 100)),
+    );
+    // At 2 nights there's no nights discount (0%), but the 17-pax headcount
+    // discount (3%) is nonzero -- confirm it's bigger than it would be if
+    // computed off paid lines only, proving the freed trailer's lodging value
+    // really is part of the basis.
+    expect(result.headcountDiscountAmount).toBeGreaterThan(
+      Math.round(paidLodgingOneNight * (result.headcountDiscountPct / 100)),
+    );
+
+    expect(result.subtotalAfterDiscounts).toBe(result.grossBeforeDiscount - result.totalDiscounts);
+  });
+
+  it('scales the liberados gross-up and bonification correctly with multiple freed trailers (24-31 pax tier = 2x)', () => {
+    const config = buildConfig();
+    const result = calculateQuote(
+      {
+        retreatStartDate: '2026-08-10',
+        nights: 2,
+        accommodationMix: [
+          { accommodationTypeId: TRAILER_ID, units: 1 },
+          { accommodationTypeId: CABINT_QUAD_ID, units: 6 },
+        ],
+        mealPlan: null,
+      },
+      config,
+    );
+
+    expect(result.totalPeople).toBe(25); // 1 + 6*4, paid pax only
+    expect(result.liberadosMultiplier).toBe(2); // 24-31 pax tier
+
+    const expectedUnitCost = Math.round(TRAILER_LODGING * 1.21 * 2 + FOOD_PP * 1.21 * 2);
+    expect(result.liberadosUnitCost).toBe(expectedUnitCost);
+    expect(result.liberadosDiscountAmount).toBe(2 * expectedUnitCost);
+
+    // The Excel's single "trailer descuento" row counts as just ONE extra
+    // salon-prorateo type, regardless of how many trailers (N) it represents.
+    const salonSharePerLine = (SALON_PER_DAY * 2) / 25;
+    expect(result.salonCostTotal).toBe(Math.round(salonSharePerLine * 3)); // 2 real lines + 1 liberados row
+  });
+
+  it('does NOT change the result for a case with no liberados, no manual adjustment, and a single accommodation type', () => {
+    const config = buildConfig();
+    const result = calculateQuote(
+      { retreatStartDate: '2026-08-10', nights: 2, accommodationMix: [{ accommodationTypeId: CABINT_QUAD_ID, units: 1 }], mealPlan: null },
+      config,
+    );
+
+    expect(result.liberadosMultiplier).toBe(0);
+    expect(result.liberadosDiscountAmount).toBe(0);
+    expect(result.accommodationTotal).toBe(Math.round(1 * CABINT_QUAD_LODGING * 2 * 1.21));
+    expect(result.foodTotal).toBe(Math.round(1 * FOOD_PP * 4 * 2 * 1.21));
+    expect(result.lodgingOneNightTotal).toBe(Math.round(1 * CABINT_QUAD_LODGING * 1.21));
+    const salonSharePerLine = (SALON_PER_DAY * 2) / result.totalPeople;
+    expect(result.salonCostTotal).toBe(Math.round(salonSharePerLine)); // just the 1 real line, no extra row
+  });
+
   it('does NOT add an extra salon-prorateo type when no liberados bonification applies', () => {
     const config = buildConfig();
     const result = calculateQuote(
