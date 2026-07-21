@@ -1,74 +1,111 @@
 ### SEASONS
-season_name,start_date,end_date,salon_per_day
-Julio-Agosto 2026,2026-07-01,2026-08-31,181500
-Septiembre-Octubre 2026,2026-09-01,2026-10-31,193600
+season_name,start_date,end_date,salon_per_day,food_price_per_person_per_night,meat_base_price
+Julio-Agosto 2026,2026-07-01,2026-08-31,181500,64026.90,22000
+Septiembre-Octubre 2026,2026-09-01,2026-10-31,193600,67228.35,23000
+Noviembre-Diciembre 2026,2026-11-01,2026-12-31,205700,70589.77,24000
+Enero-Febrero 2027,2027-01-01,2027-02-28,205700,72707.46,25000
 
 ### ACCOMMODATION_TYPES
-code,label,min_capacity,max_capacity,total_units,bathroom_type
-carpa,Carpa,1,1,10,exterior
-trailer_x1,Trailer individual,1,1,8,exterior
-trailer_x2,Trailer doble,2,2,8,exterior
-cabint_individual,Cabaña con baño interior · individual,1,1,5,interior
-cabint_doble,Cabaña con baño interior · doble,2,2,5,interior
-cabint_triple,Cabaña con baño interior · triple,3,3,5,interior
-cabint_cuadruple,Cabaña con baño interior · cuádruple,4,4,5,interior
-cabext_individual,Cabaña con baño exterior · individual,1,1,3,exterior
-cabext_doble,Cabaña con baño exterior · doble,2,2,3,exterior
-cabext_triple,Cabaña con baño exterior · triple,3,3,3,exterior
-cabext_cuadruple,Cabaña con baño exterior · cuádruple,4,4,3,exterior
-cabext_quintuple,Cabaña con baño exterior · quíntuple,5,5,3,exterior
-cabext_sextuple,Cabaña con baño exterior · séxtuple,6,6,3,exterior
+code,label,min_capacity,max_capacity,total_units,bathroom_type,category
+carpa,Carpa,1,1,10,exterior,carpa
+trailer_x1,Trailer individual,1,1,8,exterior,trailer
+trailer_x2,Trailer doble,2,2,8,exterior,trailer
+cabint_individual,Cabaña con baño interior · individual,1,1,5,interior,cabin_interior
+cabint_doble,Cabaña con baño interior · doble,2,2,5,interior,cabin_interior
+cabint_triple,Cabaña con baño interior · triple,3,3,5,interior,cabin_interior
+cabint_cuadruple,Cabaña con baño interior · cuádruple,4,4,5,interior,cabin_interior
+cabext_individual,Cabaña con baño exterior · individual,1,1,3,exterior,cabin_exterior
+cabext_doble,Cabaña con baño exterior · doble,2,2,3,exterior,cabin_exterior
+cabext_triple,Cabaña con baño exterior · triple,3,3,3,exterior,cabin_exterior
+cabext_cuadruple,Cabaña con baño exterior · cuádruple,4,4,3,exterior,cabin_exterior
+cabext_quintuple,Cabaña con baño exterior · quíntuple,5,5,3,exterior,cabin_exterior
+cabext_sextuple,Cabaña con baño exterior · séxtuple,6,6,3,exterior,cabin_exterior
 
 ### RATES
-season_name,accommodation_code,combined_rate_per_night
-Julio-Agosto 2026,carpa,86173.92
-Julio-Agosto 2026,trailer_x1,122454.99
-Julio-Agosto 2026,trailer_x2,202568.47
-Julio-Agosto 2026,cabint_individual,226325.92
-Julio-Agosto 2026,cabint_doble,317401.56
-Julio-Agosto 2026,cabint_triple,400905.22
-Julio-Agosto 2026,cabint_cuadruple,497390.83
-Julio-Agosto 2026,cabext_individual,183046.18
-Julio-Agosto 2026,cabext_doble,269794.51
-Julio-Agosto 2026,cabext_triple,359789.69
-Julio-Agosto 2026,cabext_cuadruple,445455.36
-Julio-Agosto 2026,cabext_quintuple,556007.76
-Julio-Agosto 2026,cabext_sextuple,642757.19
-Septiembre-Octubre 2026,carpa,90482.72
-Septiembre-Octubre 2026,trailer_x1,128577.84
-Septiembre-Octubre 2026,trailer_x2,212697.10
-Septiembre-Octubre 2026,cabint_individual,237642.33
-Septiembre-Octubre 2026,cabint_doble,333271.85
-Septiembre-Octubre 2026,cabint_triple,420950.80
-Septiembre-Octubre 2026,cabint_cuadruple,522260.79
-Septiembre-Octubre 2026,cabext_individual,192198.60
-Septiembre-Octubre 2026,cabext_doble,283284.44
-Septiembre-Octubre 2026,cabext_triple,377779.49
-Septiembre-Octubre 2026,cabext_cuadruple,467728.55
-Septiembre-Octubre 2026,cabext_quintuple,583808.67
-Septiembre-Octubre 2026,cabext_sextuple,674895.67
-
-### MEAL_TIERS
-code,label,protein_tier,surcharge_per_person_total
-lunch_only,Solo almuerzo con carne (Item 200g),item_200g,8000
-lunch_only,Solo almuerzo con carne (Premium 400g),premium_400g,12000
-lunch_dinner,Almuerzo y cena con carne (Item 200g),item_200g,14000
-lunch_dinner,Almuerzo y cena con carne (Premium 400g),premium_400g,20000
-full,Todas las comidas con carne (Item 200g),item_200g,22000
-full,Todas las comidas con carne (Premium 400g),premium_400g,32000
+season_name,accommodation_code,lodging_rate_per_night
+Julio-Agosto 2026,carpa,22147.02
+Julio-Agosto 2026,trailer_x1,58428.09
+Julio-Agosto 2026,trailer_x2,74514.67
+Julio-Agosto 2026,cabint_individual,162299.03
+Julio-Agosto 2026,cabint_doble,189347.76
+Julio-Agosto 2026,cabint_triple,208824.53
+Julio-Agosto 2026,cabint_cuadruple,241283.23
+Julio-Agosto 2026,cabext_individual,119019.29
+Julio-Agosto 2026,cabext_doble,141740.71
+Julio-Agosto 2026,cabext_triple,167708.99
+Julio-Agosto 2026,cabext_cuadruple,189347.76
+Julio-Agosto 2026,cabext_quintuple,235873.26
+Julio-Agosto 2026,cabext_sextuple,258595.79
+Septiembre-Octubre 2026,carpa,23254.37
+Septiembre-Octubre 2026,trailer_x1,61349.49
+Septiembre-Octubre 2026,trailer_x2,78240.40
+Septiembre-Octubre 2026,cabint_individual,170413.98
+Septiembre-Octubre 2026,cabint_doble,198815.15
+Septiembre-Octubre 2026,cabint_triple,219265.75
+Septiembre-Octubre 2026,cabint_cuadruple,253347.39
+Septiembre-Octubre 2026,cabext_individual,124970.25
+Septiembre-Octubre 2026,cabext_doble,148827.74
+Septiembre-Octubre 2026,cabext_triple,176094.44
+Septiembre-Octubre 2026,cabext_cuadruple,198815.15
+Septiembre-Octubre 2026,cabext_quintuple,247666.92
+Septiembre-Octubre 2026,cabext_sextuple,271525.57
+Noviembre-Diciembre 2026,carpa,23254.37
+Noviembre-Diciembre 2026,trailer_x1,61349.49
+Noviembre-Diciembre 2026,trailer_x2,78240.40
+Noviembre-Diciembre 2026,cabint_individual,170413.98
+Noviembre-Diciembre 2026,cabint_doble,198815.15
+Noviembre-Diciembre 2026,cabint_triple,219265.75
+Noviembre-Diciembre 2026,cabint_cuadruple,253347.39
+Noviembre-Diciembre 2026,cabext_individual,124970.25
+Noviembre-Diciembre 2026,cabext_doble,148827.74
+Noviembre-Diciembre 2026,cabext_triple,176094.44
+Noviembre-Diciembre 2026,cabext_cuadruple,198815.15
+Noviembre-Diciembre 2026,cabext_quintuple,247666.92
+Noviembre-Diciembre 2026,cabext_sextuple,271525.57
+Enero-Febrero 2027,carpa,23254.37
+Enero-Febrero 2027,trailer_x1,61349.49
+Enero-Febrero 2027,trailer_x2,78240.40
+Enero-Febrero 2027,cabint_individual,170413.98
+Enero-Febrero 2027,cabint_doble,198815.15
+Enero-Febrero 2027,cabint_triple,219265.75
+Enero-Febrero 2027,cabint_cuadruple,253347.39
+Enero-Febrero 2027,cabext_individual,124970.25
+Enero-Febrero 2027,cabext_doble,148827.74
+Enero-Febrero 2027,cabext_triple,176094.44
+Enero-Febrero 2027,cabext_cuadruple,198815.15
+Enero-Febrero 2027,cabext_quintuple,247666.92
+Enero-Febrero 2027,cabext_sextuple,271525.57
 
 ### DISCOUNTS_NIGHTS
-min_nights,max_nights,discount_pct
-1,2,0
-3,4,3
-5,9,5
-10,,10
+season_name,min_nights,max_nights,discount_pct
+Julio-Agosto 2026,1,2,0
+Julio-Agosto 2026,3,4,3
+Julio-Agosto 2026,5,9,10
+Julio-Agosto 2026,10,,10
+Septiembre-Octubre 2026,1,2,0
+Septiembre-Octubre 2026,3,4,3
+Septiembre-Octubre 2026,5,9,5
+Septiembre-Octubre 2026,10,,10
+Noviembre-Diciembre 2026,1,2,0
+Noviembre-Diciembre 2026,3,4,3
+Noviembre-Diciembre 2026,5,9,5
+Noviembre-Diciembre 2026,10,,10
+Enero-Febrero 2027,1,2,0
+Enero-Febrero 2027,3,4,3
+Enero-Febrero 2027,5,9,5
+Enero-Febrero 2027,10,,10
 
 ### DISCOUNTS_HEADCOUNT
 min_people,discount_pct
 16,3
 26,6
 41,10
+
+### LIBERADOS_TIERS
+min_people,max_people,multiplier
+16,23,1
+24,31,2
+32,,3
 
 ### SALON_THRESHOLDS
 salon_code,label,min_people,max_people,long_weekend_min_nights,long_weekend_min_people,flat_adjustment
@@ -80,4 +117,3 @@ key,value
 iva_pct,21
 deposit_pct,30
 cash_discount_pct,20
-extra_meal_price,24485.2
