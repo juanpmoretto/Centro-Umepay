@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase/client';
-import type { QuoteRow } from '@/lib/supabase/types';
+import type { QuoteRow, MealPlan } from '@/lib/supabase/types';
 import { usePricingConfig } from '@/lib/pricing/usePricingConfig';
 import { calculateQuote } from '@/lib/pricing/calculateQuote';
 import type { AccommodationMixInput, QuoteResult } from '@/lib/pricing/types';
@@ -12,8 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AccommodationMixEditor } from '@/components/quote/AccommodationMixEditor';
+import { MealPlanSelector } from '@/components/quote/MealPlanSelector';
 import { QuoteBreakdown } from '@/components/quote/QuoteBreakdown';
 
 export function QuoteExplorerPage() {
@@ -26,8 +26,9 @@ export function QuoteExplorerPage() {
 
   const [nights, setNights] = useState(0);
   const [mix, setMix] = useState<AccommodationMixInput[]>([]);
-  const [mealTierId, setMealTierId] = useState<string | null>(null);
-  const [extraMealsCount, setExtraMealsCount] = useState(0);
+  const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
+  const [meat200gCount, setMeat200gCount] = useState(0);
+  const [meat400gCount, setMeat400gCount] = useState(0);
   const [clientMessage, setClientMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -51,8 +52,9 @@ export function QuoteExplorerPage() {
             units: m.units,
           })),
         );
-        setMealTierId(row.meal_tier_id);
-        setExtraMealsCount(row.extra_meals_count);
+        setMealPlan(row.meal_plan);
+        setMeat200gCount(row.meat_200g_count);
+        setMeat400gCount(row.meat_400g_count);
         setQuoteLoading(false);
       });
   }, [slug]);
@@ -69,12 +71,12 @@ export function QuoteExplorerPage() {
         retreatStartDate: quote.retreat_start_date,
         nights,
         accommodationMix: mix,
-        mealTierId,
-        extraMealsCount,
+        mealPlan,
+        meat200gCount,
+        meat400gCount,
         // The manual adjustment is a staff-decided exception tied to this
-        // specific negotiated quote (e.g. a minimum-headcount clause) -- the
-        // client can explore everything else, but this stays fixed and is
-        // just shown transparently in the breakdown below.
+        // specific negotiated quote -- the client can explore everything
+        // else, but this stays fixed and is just shown transparently below.
         manualAdjustment:
           quote.manual_adjustment_amount !== 0
             ? { amount: quote.manual_adjustment_amount, note: quote.manual_adjustment_note ?? '' }
@@ -98,8 +100,9 @@ export function QuoteExplorerPage() {
         units: line.units,
         people_assigned: line.peopleAssigned,
       })),
-      adjusted_meal_tier_id: mealTierId,
-      adjusted_extra_meals_count: extraMealsCount,
+      adjusted_meal_plan: mealPlan,
+      adjusted_meat_200g_count: meat200gCount,
+      adjusted_meat_400g_count: meat400gCount,
       estimated_total: result.total,
       client_message: clientMessage || null,
     });
@@ -134,39 +137,18 @@ export function QuoteExplorerPage() {
               <Label>Alojamiento y personas</Label>
               <AccommodationMixEditor accommodationTypes={config.accommodationTypes} value={mix} onChange={setMix} />
             </div>
-            <div className="space-y-1.5">
-              <Label>Alimentación</Label>
-              <Select
-                value={mealTierId ?? 'none'}
-                onValueChange={(v) => setMealTierId(v === 'none' ? null : v)}
-                items={{
-                  none: 'Vegetariano (base, sin adicional)',
-                  ...Object.fromEntries(config.mealTiers.map((t) => [t.id, t.label])),
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Vegetariano (base, sin adicional)</SelectItem>
-                  {config.mealTiers.map((tier) => (
-                    <SelectItem key={tier.id} value={tier.id}>
-                      {tier.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="extraMealsCount">Comidas sueltas extra (almuerzo o cena de más)</Label>
-              <Input
-                id="extraMealsCount"
-                type="number"
-                min={0}
-                value={extraMealsCount}
-                onChange={(e) => setExtraMealsCount(Number(e.target.value) || 0)}
-              />
-            </div>
+
+            <MealPlanSelector
+              mealPlan={mealPlan}
+              meat200gCount={meat200gCount}
+              meat400gCount={meat400gCount}
+              totalPeople={result?.totalPeople ?? 0}
+              onChange={(v) => {
+                setMealPlan(v.mealPlan);
+                setMeat200gCount(v.meat200gCount);
+                setMeat400gCount(v.meat400gCount);
+              }}
+            />
           </CardContent>
         </Card>
 

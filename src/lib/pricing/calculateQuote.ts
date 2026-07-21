@@ -1,4 +1,4 @@
-import type { PricingConfig, QuoteInput, QuoteResult, SalonAssignment } from './types';
+import type { PricingConfig, QuoteInput, QuoteResult, SalonAssignment, CapacityWarning, MealAddonBreakdown } from './types';
 
 function round(n: number): number {
   return Math.round(n);
@@ -71,52 +71,134 @@ function assignSalon(
   };
 }
 
-/** 1, 0.97, 0.95 or 0.9 -- multiplies the subtotal, it is not a "% off" to add to anything else. */
-function nightsMultiplierFor(config: PricingConfig, nights: number): number {
-  const tier = config.nightsDiscounts.find(
-    (t) => nights >= t.min_nights && (t.max_nights == null || nights <= t.max_nights),
-  );
-  return 1 - (tier?.discount_pct ?? 0) / 100;
+// Shared physical unit pools -- confirmed with Rochi. Exceeding these doesn't
+// block the quote, it just shows a warning (matches the Excel's behavior of
+// showing an error banner instead of blocking input).
+const CATEGORY_CAPS: Record<string, number> = {
+  trailer: 8,
+  cabin_interior: 5,
+  cabin_exterior: 3,
+};
+
+function checkCapacityWarnings(
+  config: PricingConfig,
+  mix: { accommodationTypeId: string; units: number }[],
+): CapacityWarning[] {
+  const warnings: CapacityWarning[] = [];
+  const usedByCategory = new Map<string, number>();
+
+  for (const entry of mix) {
+    const accType = config.accommodationTypes.find((a) => a.id === entry.accommodationTypeId);
+    if (!accType) continue;
+    usedByCategory.set(accType.category, (usedByCategory.get(accType.category) ?? 0) + entry.units);
+  }
+
+  for (const [category, used] of usedByCategory) {
+    const max = CATEGORY_CAPS[category];
+    if (max != null && used > max) {
+      warnings.push({ category, used, max });
+    }
+  }
+
+  // Exterior cabins: at most 1 unit configured for 5 people, at most 1 for 6.
+  for (const code of ['cabext_quintuple', 'cabext_sextuple']) {
+    const entry = mix.find((m) => {
+      const accType = config.accommodationTypes.find((a) => a.id === m.accommodationTypeId);
+      return accType?.code === code;
+    });
+    if (entry && entry.units > 1) {
+      warnings.push({ category: code, used: entry.units, max: 1 });
+    }
+  }
+
+  return warnings;
 }
 
-/** 1, 0.97, 0.94 or 0.9 -- multiplies the (already nights-discounted) subtotal. */
-function headcountMultiplierFor(config: PricingConfig, totalPeople: number): number {
-  const qualifying = config.headcountDiscounts.filter((t) => totalPeople > t.min_people);
-  const pct = qualifying.length === 0 ? 0 : Math.max(...qualifying.map((t) => t.discount_pct));
-  return 1 - pct / 100;
+/** 1, 0.97, 0.9 or 0.95/0.9 depending on season -- multiplies lodgingOneNightTotal, not the gross. */
+function nightsDiscountPctFor(config: PricingConfig, seasonId: string, nights: number): number {
+  const tier = config.nightsDiscounts.find(
+    (t) => t.season_id === seasonId && nights >= t.min_nights && (t.max_nights == null || nights <= t.max_nights),
+  );
+  return tier?.discount_pct ?? 0;
+}
+
+function headcountDiscountPctFor(config: PricingConfig, totalPeople: number): number {
+  const qualifying = config.headcountDiscounts.filter((t) => totalPeople >= t.min_people);
+  if (qualifying.length === 0) return 0;
+  return Math.max(...qualifying.map((t) => t.discount_pct));
+}
+
+function liberadosMultiplierFor(config: PricingConfig, totalPeople: number): number {
+  const tier = config.liberadosTiers.find(
+    (t) => totalPeople >= t.min_people && (t.max_people == null || totalPeople <= t.max_people),
+  );
+  return tier?.multiplier ?? 0;
+}
+
+/** ((precio_base_carne * 1.1) * factor - precio_base_carne) * 1.21 */
+function carneUnitPrice(meatBasePrice: number, factor: number, ivaMultiplier: number): number {
+  return (meatBasePrice * 1.1 * factor - meatBasePrice) * ivaMultiplier;
+}
+
+function calculateMealAddon(
+  input: QuoteInput,
+  totalPeople: number,
+  nights: number,
+  meatBasePrice: number,
+  ivaMultiplier: number,
+): MealAddonBreakdown {
+  const meat200gCount = input.meat200gCount ?? 0;
+  const meat400gCount = input.meat400gCount ?? 0;
+  const unitPrice200g = carneUnitPrice(meatBasePrice, 1.3, ivaMultiplier);
+  const unitPrice400g = carneUnitPrice(meatBasePrice, 1.6, ivaMultiplier);
+
+  let total = 0;
+  if (input.mealPlan === 'lunch_only') {
+    total = unitPrice200g * 1 * nights * meat200gCount + unitPrice400g * 1 * nights * meat400gCount;
+  } else if (input.mealPlan === 'lunch_dinner') {
+    total = unitPrice200g * 2 * nights * meat200gCount + unitPrice400g * 2 * nights * meat400gCount;
+  } else if (input.mealPlan === 'full_board') {
+    // Confirmed as-is from the real formula: pensión completa always bills at
+    // the blended premium+item rate, no separate pure-200g option -- applies
+    // to whoever is on this plan (the whole group, since "todo el grupo debe
+    // elegir el mismo plan de comidas sin excepción").
+    const perPerson = unitPrice400g * 2 + unitPrice200g * 1;
+    total = perPerson * nights * totalPeople;
+  }
+
+  return {
+    plan: input.mealPlan ?? null,
+    meat200gCount,
+    meat400gCount,
+    unitPrice200g: round(unitPrice200g),
+    unitPrice400g: round(unitPrice400g),
+    total: round(total),
+  };
 }
 
 /**
- * Pure, side-effect-free quote calculator. Rebuilt from the actual cell
- * formulas of the real monthly "cotizador" tabs that Centro Umepay staff
- * currently use to quote clients (JULIO-AGOSTO..ENE-FEB27) -- NOT the older,
- * generic "cotizador" master template, which computes differently and is no
- * longer how real quotes are built. Verified peso-for-peso against a
- * controlled side-by-side test (5x trailer individual + 1x cabaña interior
- * cuádruple + 1x cabaña exterior cuádruple, 13 personas, 2 noches,
- * Julio-Agosto 2026): reproduces the real spreadsheet's $3,847,162
- * pre-split subtotal and $3,308,560 final total exactly.
+ * Pure, side-effect-free quote calculator. Implements the "cotizador grupal"
+ * exactly as specified in the authoritative reference derived from the real
+ * spreadsheet's formulas (JUL-AGO26 tab as the template, cross-checked
+ * against SEP-OCT26/NOV-DIC26/ENE-FEB27), confirmed point-by-point with
+ * Centro Umepay staff. Key points:
  *
- * Key points, all confirmed against that real formula:
- * - Accommodation is priced per whole unit/configuration (e.g. a "cuádruple"
- *   cabin has one combined rate for the whole cabin), not a flat per-person
- *   rate. That combined rate already includes the configuration's base
- *   vegetarian food.
- * - IVA (21%) is applied PER ACCOMMODATION LINE (units * rate * nights *
- *   1.21) -- not as a separate 50%-of-subtotal step at the end. There is no
- *   separate "logística" fee in the real monthly tabs (only the old master
- *   template had one).
+ * - Lodging and food are priced SEPARATELY per accommodation line, each with
+ *   IVA (21%) applied independently -- not a single combined+taxed rate.
+ * - The nights and headcount discounts are computed on ONE NIGHT of
+ *   lodging-only cost (not the multi-night, food-inclusive gross) -- the
+ *   discount amount does not scale with the number of nights.
+ * - Nights discount tiers are per-season (one season currently has a unique
+ *   promo at the 5-9 night tier).
  * - Salon usage (salon_per_day * nights / totalPeople) is added once for
- *   EACH DISTINCT accommodation line with a nonzero quantity -- an unusual
- *   quirk of the real sheet, but verified to reproduce it exactly.
- * - The nights discount and the headcount discount combine MULTIPLICATIVELY
- *   (sequential), not additively.
- * - Meal add-ons (carne surcharge, extra standalone meals) are NOT
- *   discounted -- they're added after both discounts.
- * - The final total is NOT a 50/50 transfer-vs-cash split: it's
- *   deposit_pct% paid as a seña (no discount) + the rest paid in cash on
- *   arrival with a cash_discount_pct% discount. Both intermediate amounts
- *   (deposit + balance) sum exactly to the total, by construction.
+ *   EACH DISTINCT accommodation line with a nonzero quantity.
+ * - "Liberados": 16+ pax groups get a bonification (subtracted) equal to
+ *   1-3x the cost of a "trailer x1" line, tiered by headcount.
+ * - The final payment split is fixed: 30% seña (no discount) + 70% paid in
+ *   cash on arrival with a 20% discount -- not a 50/50 transfer/cash split.
+ * - The carne addon (200g/400g) is computed via a fixed formula from each
+ *   season's meat_base_price, and added on top of the total, varying by
+ *   which of the 3 meal plans the group chose.
  */
 export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteResult {
   const season = resolveSeason(config, input.retreatStartDate);
@@ -136,21 +218,26 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     }
     const capacity = accType.max_capacity;
     const peopleAssigned = entry.units * capacity;
-    const lineTotal = entry.units * rate.combined_rate_per_night * input.nights * ivaMultiplier;
+    const foodPerUnitPerNight = season.food_price_per_person_per_night * capacity;
+
     return {
       accommodationTypeId: accType.id,
       label: accType.label,
       units: entry.units,
       capacity,
       peopleAssigned,
-      combinedRatePerNight: rate.combined_rate_per_night,
-      lineTotal: round(lineTotal),
+      lodgingRatePerNight: rate.lodging_rate_per_night,
+      lodgingLineTotal: round(entry.units * rate.lodging_rate_per_night * input.nights * ivaMultiplier),
+      foodLineTotal: round(entry.units * foodPerUnitPerNight * input.nights * ivaMultiplier),
+      lodgingOneNight: round(entry.units * rate.lodging_rate_per_night * ivaMultiplier),
     };
   });
 
   const nonzeroLines = accommodationLines.filter((l) => l.units > 0);
-  const baseAccommodationTotal = round(accommodationLines.reduce((sum, l) => sum + l.lineTotal, 0));
   const totalPeople = accommodationLines.reduce((sum, l) => sum + l.peopleAssigned, 0);
+  const accommodationTotal = round(accommodationLines.reduce((sum, l) => sum + l.lodgingLineTotal, 0));
+  const foodTotal = round(accommodationLines.reduce((sum, l) => sum + l.foodLineTotal, 0));
+  const lodgingOneNightTotal = round(accommodationLines.reduce((sum, l) => sum + l.lodgingOneNight, 0));
 
   const salon = assignSalon(
     config,
@@ -159,75 +246,76 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     input.retreatStartDate,
     input.longWeekendDates ?? [],
   );
+  const capacityWarnings = checkCapacityWarnings(config, input.accommodationMix);
 
   const salonSharePerLine = totalPeople > 0 ? (season.salon_per_day * input.nights) / totalPeople : 0;
   const salonCostTotal = round(salonSharePerLine * nonzeroLines.length);
-  const grossBeforeDiscount = baseAccommodationTotal + salonCostTotal;
 
-  const nightsMultiplier = nightsMultiplierFor(config, input.nights);
-  const headcountMultiplier = headcountMultiplierFor(config, totalPeople);
-  const nightsDiscountPct = round((1 - nightsMultiplier) * 100);
-  const headcountDiscountPct = round((1 - headcountMultiplier) * 100);
+  const grossBeforeDiscount = accommodationTotal + foodTotal + salonCostTotal;
 
-  const subtotalAfterDiscounts = round(grossBeforeDiscount * nightsMultiplier * headcountMultiplier);
-  const discountAmount = grossBeforeDiscount - subtotalAfterDiscounts;
+  const nightsDiscountPct = nightsDiscountPctFor(config, season.id, input.nights);
+  const headcountDiscountPct = headcountDiscountPctFor(config, totalPeople);
+  const nightsDiscountAmount = round(lodgingOneNightTotal * (nightsDiscountPct / 100));
+  const headcountDiscountAmount = round(lodgingOneNightTotal * (headcountDiscountPct / 100));
 
-  let mealTierLabel: string | null = null;
-  let mealSurchargeTotal = 0;
-  if (input.mealTierId) {
-    const tier = config.mealTiers.find((t) => t.id === input.mealTierId);
-    if (!tier) {
-      throw new Error(`Nivel de comida desconocido: ${input.mealTierId}`);
-    }
-    mealTierLabel = tier.label;
-    mealSurchargeTotal = round(totalPeople * tier.surcharge_per_person_total);
-  }
+  const trailerX1 = config.accommodationTypes.find((a) => a.code === 'trailer_x1');
+  const trailerX1Rate = trailerX1
+    ? config.accommodationRates.find((r) => r.season_id === season.id && r.accommodation_type_id === trailerX1.id)
+    : undefined;
+  const liberadosMultiplier = liberadosMultiplierFor(config, totalPeople);
+  const liberadosUnitCost = trailerX1Rate
+    ? round(trailerX1Rate.lodging_rate_per_night * ivaMultiplier * input.nights + salonSharePerLine)
+    : 0;
+  const liberadosDiscountAmount = liberadosMultiplier * liberadosUnitCost;
 
-  const extraMealsCount = input.extraMealsCount ?? 0;
-  const extraMealsTotal = round(extraMealsCount * config.settings.extra_meal_price);
+  const totalDiscounts = nightsDiscountAmount + headcountDiscountAmount + liberadosDiscountAmount;
+  const subtotalAfterDiscounts = grossBeforeDiscount - totalDiscounts;
+
+  const depositPct = config.settings.deposit_pct;
+  const cashDiscountPct = config.settings.cash_discount_pct;
+  const depositAmount = round(subtotalAfterDiscounts * (depositPct / 100));
+  const balanceOnArrival = round(subtotalAfterDiscounts * (1 - depositPct / 100) * (1 - cashDiscountPct / 100));
+  const totalACobrar = depositAmount + balanceOnArrival;
+
+  const mealAddon = calculateMealAddon(input, totalPeople, input.nights, season.meat_base_price, ivaMultiplier);
 
   const salonAdjustmentAmount = salon.flatAdjustment;
   const manualAdjustmentAmount = input.manualAdjustment?.amount ?? 0;
   const manualAdjustmentNote = input.manualAdjustment?.note ?? null;
 
-  const adjustedTotal =
-    subtotalAfterDiscounts + mealSurchargeTotal + extraMealsTotal + salonAdjustmentAmount + manualAdjustmentAmount;
-
-  // Confirmed real payment structure (not a 50/50 transfer-vs-cash split):
-  // deposit_pct% as seña at face value, the rest paid in cash on arrival
-  // with a cash_discount_pct% discount.
-  const depositPct = config.settings.deposit_pct;
-  const cashDiscountPct = config.settings.cash_discount_pct;
-  const depositAmount = round(adjustedTotal * (depositPct / 100));
-  const balanceOnArrival = round(adjustedTotal * (1 - depositPct / 100) * (1 - cashDiscountPct / 100));
-  const total = depositAmount + balanceOnArrival;
+  const total = totalACobrar + mealAddon.total + salonAdjustmentAmount + manualAdjustmentAmount;
 
   return {
     seasonName: season.name,
     totalPeople,
     nights: input.nights,
     accommodationLines,
-    baseAccommodationTotal,
+    accommodationTotal,
+    foodTotal,
     ivaPct,
     salonCostTotal,
     salon,
+    capacityWarnings,
     grossBeforeDiscount,
+    lodgingOneNightTotal,
     nightsDiscountPct,
     headcountDiscountPct,
-    discountAmount,
+    nightsDiscountAmount,
+    headcountDiscountAmount,
+    liberadosMultiplier,
+    liberadosUnitCost,
+    liberadosDiscountAmount,
+    totalDiscounts,
     subtotalAfterDiscounts,
-    mealTierLabel,
-    mealSurchargeTotal,
-    extraMealsCount,
-    extraMealsTotal,
-    adjustedTotal,
-    salonAdjustmentAmount,
-    manualAdjustmentAmount,
-    manualAdjustmentNote,
     depositPct,
     cashDiscountPct,
     depositAmount,
     balanceOnArrival,
+    totalACobrar,
+    mealAddon,
+    salonAdjustmentAmount,
+    manualAdjustmentAmount,
+    manualAdjustmentNote,
     total,
   };
 }

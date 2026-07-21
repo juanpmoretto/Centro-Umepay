@@ -6,13 +6,29 @@ interface QuoteBreakdownProps {
   result: QuoteResult;
 }
 
+const PLAN_LABELS: Record<string, string> = {
+  lunch_only: 'Solo almuerzo',
+  lunch_dinner: 'Almuerzo y cena',
+  full_board: 'Pensión completa',
+};
+
 export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
   return (
     <div className="space-y-4 text-sm">
       <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-        Este es un <strong>estimado</strong> calculado en base a la temporada {result.seasonName}. El precio
-        final está sujeto a confirmación de disponibilidad real por parte del equipo de Centro Umepay.
+        Este es un <strong>estimado</strong> calculado en base a la temporada {result.seasonName} ·{' '}
+        {result.totalPeople} personas. El precio final está sujeto a confirmación de disponibilidad real
+        por parte del equipo de Centro Umepay.
       </div>
+
+      {result.capacityWarnings.map((w) => (
+        <div
+          key={w.category}
+          className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+        >
+          ⚠ Cupo excedido en "{w.category}": {w.used} de {w.max} unidades disponibles.
+        </div>
+      ))}
 
       {result.salon.warning && (
         <div className="rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
@@ -21,7 +37,7 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
       )}
       {result.salon.label && (
         <p className="text-muted-foreground">
-          Salón asignado para {result.totalPeople} personas: <strong>{result.salon.label}</strong>
+          Salón asignado: <strong>{result.salon.label}</strong>
         </p>
       )}
 
@@ -29,10 +45,9 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
         {result.accommodationLines.map((line) => (
           <div key={line.accommodationTypeId} className="flex justify-between">
             <span>
-              {line.label} · {line.units} unidad(es) × {line.capacity} pers. × {result.nights} noches (IVA
-              incluido)
+              {line.label} · {line.units} unidad(es) × {line.capacity} pers. × {result.nights} noches
             </span>
-            <span>{formatARS(line.lineTotal)}</span>
+            <span>{formatARS(line.lodgingLineTotal + line.foodLineTotal)}</span>
           </div>
         ))}
         <div className="flex justify-between text-muted-foreground">
@@ -44,31 +59,66 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
       <Separator />
 
       <div className="flex justify-between">
-        <span>Subtotal (IVA {result.ivaPct}% incluido en el alojamiento)</span>
+        <span>Alojamiento (IVA {result.ivaPct}% incluido)</span>
+        <span>{formatARS(result.accommodationTotal)}</span>
+      </div>
+      <div className="flex justify-between">
+        <span>Comidas (IVA {result.ivaPct}% incluido)</span>
+        <span>{formatARS(result.foodTotal)}</span>
+      </div>
+      <div className="flex justify-between font-medium">
+        <span>Total bruto</span>
         <span>{formatARS(result.grossBeforeDiscount)}</span>
       </div>
 
-      {(result.nightsDiscountPct > 0 || result.headcountDiscountPct > 0) && (
+      {result.nightsDiscountAmount > 0 && (
         <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+          <span>Descuento por noches ({result.nightsDiscountPct}%)</span>
+          <span>-{formatARS(result.nightsDiscountAmount)}</span>
+        </div>
+      )}
+      {result.headcountDiscountAmount > 0 && (
+        <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+          <span>Descuento por personas ({result.headcountDiscountPct}%)</span>
+          <span>-{formatARS(result.headcountDiscountAmount)}</span>
+        </div>
+      )}
+      {result.liberadosDiscountAmount > 0 && (
+        <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+          <span>Bonificación liberados ({result.liberadosMultiplier}× trailer)</span>
+          <span>-{formatARS(result.liberadosDiscountAmount)}</span>
+        </div>
+      )}
+
+      <Separator />
+
+      <div className="flex justify-between font-medium">
+        <span>Total con descuentos incluidos</span>
+        <span>{formatARS(result.subtotalAfterDiscounts)}</span>
+      </div>
+      <div className="flex justify-between text-muted-foreground">
+        <span>Seña ({result.depositPct}%, sin descuento)</span>
+        <span>{formatARS(result.depositAmount)}</span>
+      </div>
+      <div className="flex justify-between text-muted-foreground">
+        <span>Saldo (en efectivo, {result.cashDiscountPct}% de descuento incluido)</span>
+        <span>{formatARS(result.balanceOnArrival)}</span>
+      </div>
+      <div className="flex justify-between font-medium">
+        <span>TOTAL A COBRAR</span>
+        <span>{formatARS(result.totalACobrar)}</span>
+      </div>
+
+      {result.mealAddon.plan && (
+        <div className="flex justify-between">
           <span>
-            Descuento ({result.nightsDiscountPct}% por noches × {result.headcountDiscountPct}% por
-            personas)
+            Adicional de carne ({PLAN_LABELS[result.mealAddon.plan]}
+            {result.mealAddon.plan !== 'full_board'
+              ? ` · ${result.mealAddon.meat200gCount} con 200g, ${result.mealAddon.meat400gCount} con 400g`
+              : ''}
+            )
           </span>
-          <span>-{formatARS(result.discountAmount)}</span>
-        </div>
-      )}
-
-      {result.mealTierLabel && (
-        <div className="flex justify-between">
-          <span>Adicional comida: {result.mealTierLabel}</span>
-          <span>{formatARS(result.mealSurchargeTotal)}</span>
-        </div>
-      )}
-
-      {result.extraMealsCount > 0 && (
-        <div className="flex justify-between">
-          <span>Comidas sueltas extra × {result.extraMealsCount}</span>
-          <span>{formatARS(result.extraMealsTotal)}</span>
+          <span>{formatARS(result.mealAddon.total)}</span>
         </div>
       )}
 
@@ -89,19 +139,8 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
       <Separator />
 
       <div className="flex justify-between text-base font-medium">
-        <span>Total estimado</span>
+        <span>Total final estimado</span>
         <span>{formatARS(result.total)}</span>
-      </div>
-
-      <div className="flex justify-between text-muted-foreground">
-        <span>Seña ({result.depositPct}%, sin descuento)</span>
-        <span>{formatARS(result.depositAmount)}</span>
-      </div>
-      <div className="flex justify-between text-muted-foreground">
-        <span>
-          Saldo al llegar (en efectivo, {result.cashDiscountPct}% de descuento incluido)
-        </span>
-        <span>{formatARS(result.balanceOnArrival)}</span>
       </div>
     </div>
   );

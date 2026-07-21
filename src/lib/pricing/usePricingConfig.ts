@@ -22,14 +22,14 @@ export function usePricingConfig(): UsePricingConfigResult {
     let cancelled = false;
 
     async function load() {
-      const [seasons, accommodationTypes, accommodationRates, mealTiers, nightsDiscounts, headcountDiscounts, salonThresholds, settings] =
+      const [seasons, accommodationTypes, accommodationRates, nightsDiscounts, headcountDiscounts, liberadosTiers, salonThresholds, settings] =
         await Promise.all([
           supabase.from('pricing_seasons').select('*').order('sort_order'),
           supabase.from('accommodation_types').select('*').order('sort_order'),
           supabase.from('accommodation_rates').select('*'),
-          supabase.from('meal_surcharge_tiers').select('*').order('sort_order'),
           supabase.from('discount_tiers_nights').select('*').order('min_nights'),
           supabase.from('discount_tiers_headcount').select('*').order('min_people'),
+          supabase.from('liberados_tiers').select('*').order('min_people'),
           supabase.from('salon_thresholds').select('*'),
           supabase.from('pricing_settings').select('*').single(),
         ]);
@@ -40,9 +40,9 @@ export function usePricingConfig(): UsePricingConfigResult {
         seasons.error ||
         accommodationTypes.error ||
         accommodationRates.error ||
-        mealTiers.error ||
         nightsDiscounts.error ||
         headcountDiscounts.error ||
+        liberadosTiers.error ||
         salonThresholds.error ||
         settings.error;
 
@@ -56,9 +56,9 @@ export function usePricingConfig(): UsePricingConfigResult {
         seasons: seasons.data ?? [],
         accommodationTypes: accommodationTypes.data ?? [],
         accommodationRates: accommodationRates.data ?? [],
-        mealTiers: mealTiers.data ?? [],
         nightsDiscounts: nightsDiscounts.data ?? [],
         headcountDiscounts: headcountDiscounts.data ?? [],
+        liberadosTiers: liberadosTiers.data ?? [],
         salonThresholds: salonThresholds.data ?? [],
         settings: settings.data!,
       });

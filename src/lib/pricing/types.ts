@@ -3,7 +3,8 @@ import type {
   AccommodationTypeRow,
   DiscountTierHeadcountRow,
   DiscountTierNightsRow,
-  MealSurchargeTierRow,
+  LiberadosTierRow,
+  MealPlan,
   PricingSeasonRow,
   PricingSettingsRow,
   SalonThresholdRow,
@@ -13,9 +14,9 @@ export interface PricingConfig {
   seasons: PricingSeasonRow[];
   accommodationTypes: AccommodationTypeRow[];
   accommodationRates: AccommodationRateRow[];
-  mealTiers: MealSurchargeTierRow[];
   nightsDiscounts: DiscountTierNightsRow[];
   headcountDiscounts: DiscountTierHeadcountRow[];
+  liberadosTiers: LiberadosTierRow[];
   salonThresholds: SalonThresholdRow[];
   settings: PricingSettingsRow;
 }
@@ -35,12 +36,13 @@ export interface QuoteInput {
   retreatStartDate: string; // ISO date, e.g. "2026-10-15"
   nights: number;
   accommodationMix: AccommodationMixInput[];
-  /** null = base vegetarian menu, no surcharge */
-  mealTierId: string | null;
-  /** standalone lunches/dinners beyond the 4 meals/day already included per night */
-  extraMealsCount?: number;
-  /** staff-entered exception (minimum billable headcount, free facilitator
-   * lodging, weekday-only discount, etc.) -- always carries a note explaining why */
+  /** null = pure vegetarian, no carne plan */
+  mealPlan: MealPlan | null;
+  /** how many of the total headcount add the 200g carne option (only meaningful if mealPlan is set) */
+  meat200gCount?: number;
+  /** how many of the total headcount add the 400g premium carne option */
+  meat400gCount?: number;
+  /** staff-entered exception not covered by the formula -- always carries a note explaining why */
   manualAdjustment?: ManualAdjustment | null;
   /** static list of long-weekend start dates (ISO), used only for the Nave 3-night/20-person rule */
   longWeekendDates?: string[];
@@ -52,9 +54,20 @@ export interface AccommodationMixLine {
   units: number;
   capacity: number;
   peopleAssigned: number;
-  combinedRatePerNight: number;
-  /** units * combinedRatePerNight * nights * (1 + ivaPct/100) -- IVA is baked in per line. */
-  lineTotal: number;
+  lodgingRatePerNight: number;
+  /** units * lodgingRatePerNight * nights * (1 + ivaPct/100) */
+  lodgingLineTotal: number;
+  /** units * (foodPricePerPerson * capacity) * nights * (1 + ivaPct/100) */
+  foodLineTotal: number;
+  /** units * lodgingRatePerNight * (1 + ivaPct/100) -- ONE night, lodging only.
+   * This is the basis the nights/headcount discounts are computed on. */
+  lodgingOneNight: number;
+}
+
+export interface CapacityWarning {
+  category: string;
+  used: number;
+  max: number;
 }
 
 export interface SalonAssignment {
@@ -64,56 +77,69 @@ export interface SalonAssignment {
   flatAdjustment: number;
 }
 
+export interface MealAddonBreakdown {
+  plan: MealPlan | null;
+  meat200gCount: number;
+  meat400gCount: number;
+  unitPrice200g: number;
+  unitPrice400g: number;
+  total: number;
+}
+
 export interface QuoteResult {
   seasonName: string;
   totalPeople: number;
   nights: number;
 
-  /** Already IVA-inclusive (see AccommodationMixLine.lineTotal). */
   accommodationLines: AccommodationMixLine[];
-  baseAccommodationTotal: number;
+  /** sum of lodgingLineTotal across lines (all nights, IVA-inclusive) */
+  accommodationTotal: number;
+  /** sum of foodLineTotal across lines (all nights, IVA-inclusive) */
+  foodTotal: number;
   ivaPct: number;
 
   /** Salon usage: salon_per_day * nights / totalPeople, added once for each
-   * DISTINCT accommodation line with a nonzero quantity -- confirmed via a
-   * real side-by-side test against the spreadsheet, an unusual quirk but
-   * verified to reproduce the real numbers exactly. */
+   * DISTINCT accommodation line with a nonzero quantity (confirmed real quirk). */
   salonCostTotal: number;
 
   salon: SalonAssignment;
+  capacityWarnings: CapacityWarning[];
 
-  /** accommodation (IVA-inclusive) + salon, before any discount */
+  /** accommodationTotal + foodTotal + salonCostTotal, before any discount */
   grossBeforeDiscount: number;
 
-  /** Display percentages -- the real combination is MULTIPLICATIVE
-   * (sequential), not additive: total multiplier = nightsMult * headcountMult. */
+  /** Both discounts are computed on ONE NIGHT of lodging-only cost (not the
+   * multi-night, food-inclusive gross) -- confirmed real (if unintuitive) rule. */
+  lodgingOneNightTotal: number;
   nightsDiscountPct: number;
   headcountDiscountPct: number;
-  discountAmount: number;
-  /** grossBeforeDiscount with both discounts applied, before meal add-ons
-   * (which are never discounted -- confirmed via the real formula). */
+  nightsDiscountAmount: number;
+  headcountDiscountAmount: number;
+
+  /** How many "liberados" trailer-equivalents apply (0, 1, 2 or 3). */
+  liberadosMultiplier: number;
+  /** Cost of one liberados unit (trailer x1 lodging+IVA*nights + its own salon share). */
+  liberadosUnitCost: number;
+  /** Subtracted from the total as a bonification for large groups. */
+  liberadosDiscountAmount: number;
+
+  totalDiscounts: number;
+  /** grossBeforeDiscount - totalDiscounts ("Total con descuentos incluidos") */
   subtotalAfterDiscounts: number;
 
-  mealTierLabel: string | null;
-  mealSurchargeTotal: number;
+  depositPct: number;
+  cashDiscountPct: number;
+  depositAmount: number;
+  balanceOnArrival: number;
+  /** depositAmount + balanceOnArrival ("TOTAL A COBRAR") */
+  totalACobrar: number;
 
-  extraMealsCount: number;
-  extraMealsTotal: number;
-
-  /** subtotalAfterDiscounts + meal add-ons + any salon/manual adjustment --
-   * this is the base the final 30/70 payment split applies to. */
-  adjustedTotal: number;
+  mealAddon: MealAddonBreakdown;
 
   salonAdjustmentAmount: number;
   manualAdjustmentAmount: number;
   manualAdjustmentNote: string | null;
 
-  /** Confirmed real payment structure: deposit_pct paid as seña (no discount),
-   * the rest paid in cash on arrival with a cash_discount_pct discount --
-   * NOT a 50/50 transfer-vs-cash split. total = depositAmount + balanceOnArrival. */
-  depositPct: number;
-  cashDiscountPct: number;
-  depositAmount: number;
-  balanceOnArrival: number;
+  /** totalACobrar + mealAddon.total + salonAdjustmentAmount + manualAdjustmentAmount */
   total: number;
 }

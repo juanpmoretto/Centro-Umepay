@@ -4,14 +4,15 @@ import { nanoid } from 'nanoid';
 import { usePricingConfig } from '@/lib/pricing/usePricingConfig';
 import { calculateQuote } from '@/lib/pricing/calculateQuote';
 import type { AccommodationMixInput, QuoteResult } from '@/lib/pricing/types';
+import type { MealPlan } from '@/lib/supabase/types';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AccommodationMixEditor } from '@/components/quote/AccommodationMixEditor';
+import { MealPlanSelector } from '@/components/quote/MealPlanSelector';
 import { QuoteBreakdown } from '@/components/quote/QuoteBreakdown';
 
 export function NewQuotePage() {
@@ -21,8 +22,9 @@ export function NewQuotePage() {
   const [retreatStartDate, setRetreatStartDate] = useState('');
   const [nights, setNights] = useState(3);
   const [mix, setMix] = useState<AccommodationMixInput[]>([]);
-  const [mealTierId, setMealTierId] = useState<string | null>(null);
-  const [extraMealsCount, setExtraMealsCount] = useState(0);
+  const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
+  const [meat200gCount, setMeat200gCount] = useState(0);
+  const [meat400gCount, setMeat400gCount] = useState(0);
   const [manualAdjustmentAmount, setManualAdjustmentAmount] = useState('');
   const [manualAdjustmentNote, setManualAdjustmentNote] = useState('');
   const [staffNote, setStaffNote] = useState('');
@@ -45,8 +47,9 @@ export function NewQuotePage() {
           retreatStartDate,
           nights,
           accommodationMix: mix,
-          mealTierId,
-          extraMealsCount,
+          mealPlan,
+          meat200gCount,
+          meat400gCount,
           manualAdjustment: manualAmount !== 0 ? { amount: manualAmount, note: manualAdjustmentNote } : null,
         },
         config,
@@ -80,8 +83,9 @@ export function NewQuotePage() {
         units: line.units,
         people_assigned: line.peopleAssigned,
       })),
-      meal_tier_id: mealTierId,
-      extra_meals_count: extraMealsCount,
+      meal_plan: mealPlan,
+      meat_200g_count: meat200gCount,
+      meat_400g_count: meat400gCount,
       manual_adjustment_amount: manualAmount,
       manual_adjustment_note: manualAmount !== 0 ? manualAdjustmentNote : null,
       calculated_total: preview.total,
@@ -138,46 +142,25 @@ export function NewQuotePage() {
             <Label>Alojamiento</Label>
             <AccommodationMixEditor accommodationTypes={config.accommodationTypes} value={mix} onChange={setMix} />
           </div>
-          <div className="space-y-1.5">
-            <Label>Alimentación</Label>
-            <Select
-              value={mealTierId ?? 'none'}
-              onValueChange={(v) => setMealTierId(v === 'none' ? null : v)}
-              items={{
-                none: 'Vegetariano (base, sin adicional)',
-                ...Object.fromEntries(config.mealTiers.map((t) => [t.id, t.label])),
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Vegetariano (base, sin adicional)</SelectItem>
-                {config.mealTiers.map((tier) => (
-                  <SelectItem key={tier.id} value={tier.id}>
-                    {tier.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="extraMealsCount">Comidas sueltas extra (almuerzo o cena fuera de lo incluido)</Label>
-            <Input
-              id="extraMealsCount"
-              type="number"
-              min={0}
-              value={extraMealsCount}
-              onChange={(e) => setExtraMealsCount(Number(e.target.value) || 0)}
-            />
-          </div>
+
+          <MealPlanSelector
+            mealPlan={mealPlan}
+            meat200gCount={meat200gCount}
+            meat400gCount={meat400gCount}
+            totalPeople={preview?.totalPeople ?? 0}
+            onChange={(v) => {
+              setMealPlan(v.mealPlan);
+              setMeat200gCount(v.meat200gCount);
+              setMeat400gCount(v.meat400gCount);
+            }}
+          />
 
           <div className="space-y-1.5 rounded-md border border-dashed p-3">
             <Label htmlFor="manualAdjustmentAmount">Ajuste manual (ARS, opcional)</Label>
             <p className="text-xs text-muted-foreground">
-              Para excepciones caso por caso que no calcula la fórmula: mínimo de facturación aunque se
-              hospeden menos personas, alojamiento gratis para el facilitador, descuento por retiro entre
-              semana, etc. Poné un monto negativo para descontar o positivo para sumar, y siempre el motivo.
+              Para excepciones caso por caso que no calcula la fórmula (algo distinto de noches, personas
+              o liberados). Poné un monto negativo para descontar o positivo para sumar, y siempre el
+              motivo.
             </p>
             <Input
               id="manualAdjustmentAmount"
@@ -193,7 +176,7 @@ export function NewQuotePage() {
                   id="manualAdjustmentNote"
                   value={manualAdjustmentNote}
                   onChange={(e) => setManualAdjustmentNote(e.target.value)}
-                  placeholder="Ej: alojamiento gratis para el facilitador"
+                  placeholder="Ej: descuento negociado extra"
                 />
               </>
             )}

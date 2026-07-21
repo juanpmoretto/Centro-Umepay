@@ -5,7 +5,8 @@
 export type BookingStatus = 'pending' | 'confirmed' | 'released';
 export type EstimatedParticipants = '10-12' | '16-20' | '20-30' | '30+';
 export type BathroomType = 'interior' | 'exterior';
-export type ProteinTier = 'item_200g' | 'premium_400g';
+export type AccommodationCategory = 'trailer' | 'cabin_interior' | 'cabin_exterior' | 'carpa';
+export type MealPlan = 'lunch_only' | 'lunch_dinner' | 'full_board';
 export type QuoteInquiryStatus = 'new' | 'reviewed';
 
 export interface BookingRequestRow {
@@ -46,9 +47,13 @@ export interface PricingSeasonRow {
   name: string;
   start_date: string;
   end_date: string;
-  /** Charged every night, for the whole group (not per person). Varies by
-   * season since Centro Umepay re-prices roughly every two months. */
+  /** Charged every night, for the whole group (not per person). Already IVA-inclusive. */
   salon_per_day: number;
+  /** Base food cost for ONE person for ONE night, no IVA -- a unit's food
+   * cost = this * capacity (see AccommodationTypeRow.max_capacity). */
+  food_price_per_person_per_night: number;
+  /** Base price used to derive the 200g/400g carne addon unit prices (see calculateQuote). */
+  meat_base_price: number;
   sort_order: number;
   synced_at: string;
 }
@@ -59,8 +64,11 @@ export interface AccommodationTypeRow {
   label: string;
   min_capacity: number;
   max_capacity: number;
+  /** Physical units of this SPECIFIC config -- informational only. The real
+   * cap is shared across the whole category (see AccommodationCategory). */
   total_units: number;
   bathroom_type: BathroomType;
+  category: AccommodationCategory;
   sort_order: number;
 }
 
@@ -68,24 +76,14 @@ export interface AccommodationRateRow {
   id: string;
   season_id: string;
   accommodation_type_id: string;
-  /** Total per-night rate for the whole unit at its fixed occupancy
-   * (see AccommodationTypeRow.max_capacity) -- already includes that
-   * configuration's base vegetarian food. Not a per-person rate. */
-  combined_rate_per_night: number;
+  /** Lodging only, no IVA, no food -- per unit per night. */
+  lodging_rate_per_night: number;
   synced_at: string;
-}
-
-export interface MealSurchargeTierRow {
-  id: string;
-  code: string;
-  label: string;
-  protein_tier: ProteinTier;
-  surcharge_per_person_total: number;
-  sort_order: number;
 }
 
 export interface DiscountTierNightsRow {
   id: string;
+  season_id: string;
   min_nights: number;
   max_nights: number | null;
   discount_pct: number;
@@ -95,6 +93,14 @@ export interface DiscountTierHeadcountRow {
   id: string;
   min_people: number;
   discount_pct: number;
+}
+
+export interface LiberadosTierRow {
+  id: string;
+  min_people: number;
+  max_people: number | null;
+  /** How many "trailer x1" line-equivalents get subtracted as a bonification. */
+  multiplier: number;
 }
 
 export interface SalonThresholdRow {
@@ -110,11 +116,10 @@ export interface SalonThresholdRow {
 
 export interface PricingSettingsRow {
   id: true;
-  /** Applied per accommodation line (units * rate * nights * (1 + iva_pct/100)), not as a separate final step. */
+  /** Applied per accommodation/food line (amount * (1 + iva_pct/100)), not as a separate final step. */
   iva_pct: number;
   /** Both the seña fraction AND the "paid up front" share of the final 30/70 payment split. */
   deposit_pct: number;
-  extra_meal_price: number;
   /** Discount on the remaining (100-deposit_pct)% paid in cash on arrival. */
   cash_discount_pct: number;
   synced_at: string;
@@ -134,10 +139,12 @@ export interface QuoteRow {
   retreat_nights: number;
   headcount: number;
   accommodation_mix: AccommodationMixEntry[];
-  meal_tier_id: string | null;
-  extra_meals_count: number;
-  /** Manual override for case-by-case exceptions (minimum billable headcount,
-   * free facilitator lodging, weekday-only discounts) -- see manual_adjustment_note. */
+  /** null = pure vegetarian, no carne plan chosen */
+  meal_plan: MealPlan | null;
+  meat_200g_count: number;
+  meat_400g_count: number;
+  /** Manual override for case-by-case exceptions not covered by the formula
+   * (e.g. a negotiated extra discount) -- see manual_adjustment_note. */
   manual_adjustment_amount: number;
   manual_adjustment_note: string | null;
   calculated_total: number;
@@ -155,8 +162,9 @@ export interface QuoteInquiryRow {
   adjusted_nights: number;
   adjusted_headcount: number;
   adjusted_accommodation_mix: AccommodationMixEntry[];
-  adjusted_meal_tier_id: string | null;
-  adjusted_extra_meals_count: number;
+  adjusted_meal_plan: MealPlan | null;
+  adjusted_meat_200g_count: number;
+  adjusted_meat_400g_count: number;
   estimated_total: number;
   client_message: string | null;
   status: QuoteInquiryStatus;

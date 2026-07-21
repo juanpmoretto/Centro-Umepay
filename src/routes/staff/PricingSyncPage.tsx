@@ -66,7 +66,7 @@ export function PricingSyncPage() {
               <li>{config.seasons.length} temporadas</li>
               <li>{config.accommodationTypes.length} tipos de alojamiento</li>
               <li>{config.accommodationRates.length} tarifas</li>
-              <li>{config.mealTiers.length} niveles de comida</li>
+              <li>{config.liberadosTiers.length} tramos de "liberados"</li>
               <li>IVA: {config.settings.iva_pct}% · Seña: {config.settings.deposit_pct}%</li>
             </ul>
           )}
