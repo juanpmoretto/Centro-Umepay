@@ -271,19 +271,23 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
   const totalDiscounts = nightsDiscountAmount + headcountDiscountAmount + liberadosDiscountAmount;
   const subtotalAfterDiscounts = grossBeforeDiscount - totalDiscounts;
 
+  // Salon and manual adjustments apply BEFORE the seña/saldo split, not after
+  // "TOTAL A COBRAR" -- otherwise the saldo's cash discount never reaches
+  // them, which understates the adjustment relative to the master Excel.
+  const salonAdjustmentAmount = salon.flatAdjustment;
+  const manualAdjustmentAmount = input.manualAdjustment?.amount ?? 0;
+  const manualAdjustmentNote = input.manualAdjustment?.note ?? null;
+  const baseFinal = subtotalAfterDiscounts + salonAdjustmentAmount + manualAdjustmentAmount;
+
   const depositPct = config.settings.deposit_pct;
   const cashDiscountPct = config.settings.cash_discount_pct;
-  const depositAmount = round(subtotalAfterDiscounts * (depositPct / 100));
-  const balanceOnArrival = round(subtotalAfterDiscounts * (1 - depositPct / 100) * (1 - cashDiscountPct / 100));
+  const depositAmount = round(baseFinal * (depositPct / 100));
+  const balanceOnArrival = round(baseFinal * (1 - depositPct / 100) * (1 - cashDiscountPct / 100));
   const totalACobrar = depositAmount + balanceOnArrival;
 
   const mealAddon = calculateMealAddon(input, totalPeople, input.nights, season.meat_base_price, ivaMultiplier);
 
-  const salonAdjustmentAmount = salon.flatAdjustment;
-  const manualAdjustmentAmount = input.manualAdjustment?.amount ?? 0;
-  const manualAdjustmentNote = input.manualAdjustment?.note ?? null;
-
-  const total = totalACobrar + mealAddon.total + salonAdjustmentAmount + manualAdjustmentAmount;
+  const total = totalACobrar + mealAddon.total;
 
   return {
     seasonName: season.name,
@@ -307,15 +311,16 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig): QuoteR
     liberadosDiscountAmount,
     totalDiscounts,
     subtotalAfterDiscounts,
+    salonAdjustmentAmount,
+    manualAdjustmentAmount,
+    manualAdjustmentNote,
+    baseFinal,
     depositPct,
     cashDiscountPct,
     depositAmount,
     balanceOnArrival,
     totalACobrar,
     mealAddon,
-    salonAdjustmentAmount,
-    manualAdjustmentAmount,
-    manualAdjustmentNote,
     total,
   };
 }

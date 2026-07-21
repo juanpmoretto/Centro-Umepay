@@ -127,6 +127,15 @@ export interface QuoteResult {
   /** grossBeforeDiscount - totalDiscounts ("Total con descuentos incluidos") */
   subtotalAfterDiscounts: number;
 
+  salonAdjustmentAmount: number;
+  manualAdjustmentAmount: number;
+  manualAdjustmentNote: string | null;
+
+  /** subtotalAfterDiscounts + salonAdjustmentAmount + manualAdjustmentAmount --
+   * these adjustments apply BEFORE the seña/saldo split so the cash discount
+   * on the saldo also applies proportionally to them (matches the master Excel). */
+  baseFinal: number;
+
   depositPct: number;
   cashDiscountPct: number;
   depositAmount: number;
@@ -136,10 +145,6 @@ export interface QuoteResult {
 
   mealAddon: MealAddonBreakdown;
 
-  salonAdjustmentAmount: number;
-  manualAdjustmentAmount: number;
-  manualAdjustmentNote: string | null;
-
-  /** totalACobrar + mealAddon.total + salonAdjustmentAmount + manualAdjustmentAmount */
+  /** totalACobrar + mealAddon.total */
   total: number;
 }

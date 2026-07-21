@@ -96,6 +96,28 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
         <span>Total con descuentos incluidos</span>
         <span>{formatARS(result.subtotalAfterDiscounts)}</span>
       </div>
+
+      {result.salonAdjustmentAmount !== 0 && (
+        <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+          <span>Ajuste por salón {result.salon.label}</span>
+          <span>{formatARS(result.salonAdjustmentAmount)}</span>
+        </div>
+      )}
+
+      {result.manualAdjustmentAmount !== 0 && (
+        <div className="flex justify-between">
+          <span>Ajuste manual{result.manualAdjustmentNote ? `: ${result.manualAdjustmentNote}` : ''}</span>
+          <span>{formatARS(result.manualAdjustmentAmount)}</span>
+        </div>
+      )}
+
+      {(result.salonAdjustmentAmount !== 0 || result.manualAdjustmentAmount !== 0) && (
+        <div className="flex justify-between font-medium">
+          <span>Base final</span>
+          <span>{formatARS(result.baseFinal)}</span>
+        </div>
+      )}
+
       <div className="flex justify-between text-muted-foreground">
         <span>Seña ({result.depositPct}%, sin descuento)</span>
         <span>{formatARS(result.depositAmount)}</span>
@@ -119,20 +141,6 @@ export function QuoteBreakdown({ result }: QuoteBreakdownProps) {
             )
           </span>
           <span>{formatARS(result.mealAddon.total)}</span>
-        </div>
-      )}
-
-      {result.salonAdjustmentAmount !== 0 && (
-        <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
-          <span>Ajuste por salón {result.salon.label}</span>
-          <span>{formatARS(result.salonAdjustmentAmount)}</span>
-        </div>
-      )}
-
-      {result.manualAdjustmentAmount !== 0 && (
-        <div className="flex justify-between">
-          <span>Ajuste manual{result.manualAdjustmentNote ? `: ${result.manualAdjustmentNote}` : ''}</span>
-          <span>{formatARS(result.manualAdjustmentAmount)}</span>
         </div>
       )}
 

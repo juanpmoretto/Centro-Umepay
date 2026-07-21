@@ -344,7 +344,7 @@ describe('calculateQuote', () => {
     expect(nodriza.salonAdjustmentAmount).toBe(-250000);
   });
 
-  it('applies a staff manual adjustment with its note on top of everything else', () => {
+  it('applies a staff manual adjustment BEFORE the seña/saldo split, not after TOTAL A COBRAR', () => {
     const config = buildConfig();
     const result = calculateQuote(
       {
@@ -359,7 +359,48 @@ describe('calculateQuote', () => {
 
     expect(result.manualAdjustmentAmount).toBe(-50000);
     expect(result.manualAdjustmentNote).toBe('Descuento negociado extra');
-    expect(result.total).toBe(result.totalACobrar + result.mealAddon.total + result.salonAdjustmentAmount - 50000);
+
+    // The adjustment must be baked into baseFinal BEFORE computing seña/saldo,
+    // so the saldo's 20% cash discount applies proportionally to it too --
+    // it must NOT be tacked on separately after totalACobrar.
+    expect(result.baseFinal).toBe(result.subtotalAfterDiscounts + result.salonAdjustmentAmount - 50000);
+    const expectedDeposit = Math.round(result.baseFinal * 0.3);
+    const expectedBalance = Math.round(result.baseFinal * 0.7 * 0.8);
+    expect(result.depositAmount).toBe(expectedDeposit);
+    expect(result.balanceOnArrival).toBe(expectedBalance);
+    expect(result.totalACobrar).toBe(expectedDeposit + expectedBalance);
+    expect(result.total).toBe(result.totalACobrar + result.mealAddon.total);
+  });
+
+  it('reproduces the confirmed reference case: Nodriza -$250,000 applied before the seña/saldo split', () => {
+    // Regression test for a real reported bug: the salon adjustment was being
+    // subtracted from TOTAL A COBRAR (100% of its value) instead of from the
+    // pre-split subtotal, so the saldo's 20% cash discount never reached it.
+    const config = buildConfig();
+    const result = calculateQuote(
+      {
+        retreatStartDate: '2026-08-10',
+        nights: 3,
+        accommodationMix: [{ accommodationTypeId: TRAILER_ID, units: 11 }], // Nodriza range (8-14)
+        mealPlan: null,
+      },
+      config,
+    );
+
+    expect(result.salon.salonCode).toBe('nodriza');
+    expect(result.salonAdjustmentAmount).toBe(-250000);
+
+    const baseFinal = result.subtotalAfterDiscounts - 250000;
+    expect(result.baseFinal).toBe(baseFinal);
+
+    const buggyOldTotalACobrar =
+      Math.round(result.subtotalAfterDiscounts * 0.3) + Math.round(result.subtotalAfterDiscounts * 0.7 * 0.8);
+    const buggyOldTotal = buggyOldTotalACobrar - 250000;
+
+    // The fix must make the new total $35,000 higher than the old buggy total
+    // (250,000 * (1 - 0.3 - 0.7*0.8) = 250,000 * 14%) -- confirmed against the
+    // master Excel and the exact bug report numbers.
+    expect(result.total - buggyOldTotal).toBe(Math.round(250000 * 0.14));
   });
 
   it('throws a clear error when the retreat date falls outside every configured season', () => {
